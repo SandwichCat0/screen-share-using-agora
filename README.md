@@ -1,3 +1,12 @@
+<img width="2443" height="1156" alt="image" src="https://github.com/user-attachments/assets/16b004ef-6e86-4ada-8291-55f2f30e9287" />
+
+<img width="1264" height="761" alt="image" src="https://github.com/user-attachments/assets/ed8fb105-cf34-4344-94fd-e256c386d756" />
+
+<img width="1264" height="902" alt="image" src="https://github.com/user-attachments/assets/205b733a-e572-4903-9e7d-ac476e228f54" />
+
+<img width="1264" height="902" alt="image" src="https://github.com/user-attachments/assets/2e1e4ef9-c1e3-4719-89f2-862a187bdd6b" />
+
+
 项目说明
 
 本项目最初是某屏幕共享项目的代理（“懒某熊”）找我 1:1 仿制原作者应用。
