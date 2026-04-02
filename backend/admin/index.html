@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MDShare 管理后台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background: #030712; font-family: system-ui, sans-serif; }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 8px; }
+    .btn-primary { background: #2563eb; color: #fff; padding: 8px 20px; border-radius: 6px; font-size: 14px; cursor: pointer; transition: background .15s; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-danger  { background: #7f1d1d; color: #fca5a5; padding: 4px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; }
+    .btn-success { background: #14532d; color: #86efac; padding: 4px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; }
+    .btn-info    { background: #1e3a5f; color: #7dd3fc; padding: 4px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; }
+    input, select { background: #1f2937; border: 1px solid #374151; border-radius: 6px; color: #f3f4f6; padding: 8px 12px; font-size: 14px; width: 100%; }
+    input:focus, select:focus { outline: 2px solid #2563eb; border-color: transparent; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 10px 12px; border-bottom: 1px solid #374151; color: #9ca3af; font-weight: 500; }
+    td { padding: 10px 12px; border-bottom: 1px solid #1f2937; color: #e5e7eb; }
+    tr:hover td { background: #1a2234; }
+    .tag-active  { background: #14532d; color: #86efac; }
+    .tag-banned  { background: #7f1d1d; color: #fca5a5; }
+    .tag-expired { background: #451a03; color: #fdba74; }
+    .tag-unused  { background: #1f2937; color: #9ca3af; }
+    .tag { padding: 2px 8px; border-radius: 4px; font-size: 11px; white-space: nowrap; }
+    .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
+    .modal { background: #111827; border: 1px solid #374151; border-radius: 10px; padding: 24px; width: 480px; max-width: 95vw; }
+  </style>
+</head>
+<body class="text-white min-h-screen">
+
+<!-- ── 登录页 ── -->
+<div id="loginPage" class="min-h-screen flex items-center justify-center p-4">
+  <div class="card p-8 w-full max-w-sm">
+    <div class="text-center mb-8">
+      <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-2xl mx-auto mb-3">M</div>
+      <h1 class="text-xl font-bold text-white">MDShare 管理后台</h1>
+      <p class="text-gray-400 text-sm mt-1">仅限管理员访问</p>
+    </div>
+    <div class="space-y-4">
+      <input id="loginUser" type="text" placeholder="管理员账号" autocomplete="username">
+      <input id="loginPass" type="password" placeholder="密码" autocomplete="current-password">
+      <button class="btn-primary w-full py-2.5 text-base" onclick="doLogin()">登 录</button>
+      <p id="loginErr" class="text-red-400 text-sm text-center hidden"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ── 主界面 ── -->
+<div id="mainPage" class="hidden">
+  <!-- 顶栏 -->
+  <header class="h-14 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-6 sticky top-0 z-10">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center font-bold text-sm">M</div>
+      <span class="font-semibold text-white">MDShare 管理后台</span>
+    </div>
+    <div class="flex items-center gap-4">
+      <span id="adminName" class="text-gray-400 text-sm"></span>
+      <button onclick="logout()" class="text-gray-400 hover:text-red-400 text-sm transition-colors">退出</button>
+    </div>
+  </header>
+
+  <!-- 标签页 -->
+  <div class="flex gap-1 px-6 mt-4 border-b border-gray-800 mb-6">
+    <button class="tab-btn active px-4 py-2 text-sm rounded-t font-medium transition-colors" data-tab="cards" onclick="switchTab('cards')">卡密管理</button>
+    <button class="tab-btn px-4 py-2 text-sm rounded-t font-medium transition-colors" data-tab="sessions" onclick="switchTab('sessions')">在线会话</button>
+    <button class="tab-btn px-4 py-2 text-sm rounded-t font-medium transition-colors" data-tab="billing" onclick="switchTab('billing')">计费倍率</button>
+  </div>
+
+  <div class="px-6 pb-10">
+    <!-- ── 卡密管理 ── -->
+    <div id="tab-cards">
+      <!-- 操作栏 -->
+      <div class="flex flex-wrap items-end gap-4 mb-6 card p-4">
+        <div>
+          <label class="text-xs text-gray-400 mb-1 block">生成数量</label>
+          <input id="genCount" type="number" value="1" min="1" max="100" style="width:90px">
+        </div>
+        <div>
+          <label class="text-xs text-gray-400 mb-1 block">有效天数</label>
+          <input id="genDays" type="number" value="30" min="1" style="width:90px">
+        </div>
+        <div>
+          <label class="text-xs text-gray-400 mb-1 block">最多设备</label>
+          <input id="genDevices" type="number" value="1" min="1" max="10" style="width:80px">
+        </div>
+        <div>
+          <label class="text-xs text-gray-400 mb-1 block">配额(标准分钟)</label>
+          <input id="genQuota" type="number" value="10000" min="100" style="width:120px">
+        </div>
+        <div style="flex:1;min-width:160px">
+          <label class="text-xs text-gray-400 mb-1 block">备注</label>
+          <input id="genLabel" type="text" placeholder="可选备注">
+        </div>
+        <button class="btn-primary whitespace-nowrap" onclick="generateCards()">+ 生成卡密</button>
+        <button class="btn-info whitespace-nowrap" onclick="loadCards()">刷新</button>
+      </div>
+
+      <!-- 卡密列表 -->
+      <div class="card overflow-hidden">
+        <div class="overflow-x-auto">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th><th>卡密前缀</th><th>备注</th><th>状态</th>
+                <th>配额(标准分钟)</th><th>激活时间</th><th>到期时间</th><th>设备</th><th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="cardTableBody">
+              <tr><td colspan="8" class="text-center text-gray-500 py-8">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="cardPagination" class="flex items-center justify-between px-4 py-3 border-t border-gray-800 text-sm text-gray-400"></div>
+      </div>
+    </div>
+
+    <!-- ── 在线会话 ── -->
+    <div id="tab-sessions" class="hidden">
+      <div class="flex justify-between items-center mb-4">
+        <div class="flex items-center gap-3">
+          <span class="text-xs text-gray-400">● 绿色=在线(2分钟内活跃)  ● 灰色=离线</span>
+          <label class="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+            <input id="sessionsOnlyOnline" type="checkbox" class="accent-blue-500" onchange="loadSessions()">
+            仅显示在线
+          </label>
+        </div>
+        <button class="btn-info" onclick="loadSessions()">刷新</button>
+      </div>
+      <div class="card overflow-hidden">
+        <div class="overflow-x-auto">
+          <table>
+            <thead>
+              <tr><th>状态</th><th>卡密前缀</th><th>备注</th><th>设备ID</th><th>创建时间</th><th>最后活跃</th><th>到期时间</th><th>操作</th></tr>
+            </thead>
+            <tbody id="sessionTableBody">
+              <tr><td colspan="8" class="text-center text-gray-500 py-8">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 计费倍率配置 ── -->
+    <div id="tab-billing" class="hidden">
+      <div class="card p-6 mb-6">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-base font-semibold text-white">计费倍率配置</h3>
+          <div class="flex gap-2">
+            <button class="btn-info" onclick="loadBilling()">刷新</button>
+            <button class="btn-danger" onclick="resetBilling()">恢复默认</button>
+          </div>
+        </div>
+        <p class="text-xs text-gray-400 mb-4">
+          修改计费倍率后，新创建的频道将按新倍率计费。已存在的频道在下次 tick 时生效。<br>
+          <b>标准分钟消耗</b> = 实际时长(分钟) × 分辨率倍率 × 全局倍率。推流者和观众分别计费后求和。
+        </p>
+
+        <!-- 全局倍率 -->
+        <div class="mb-6">
+          <label class="text-sm text-gray-300 mb-2 block font-medium">全局倍率</label>
+          <div class="flex items-center gap-3">
+            <input id="billingGlobal" type="number" step="0.1" min="0" max="100" value="1.0" style="width:120px">
+            <span class="text-xs text-gray-500">所有分辨率的倍率都会乘以此值</span>
+          </div>
+        </div>
+
+        <!-- 分辨率倍率表格 -->
+        <div class="overflow-x-auto">
+          <table>
+            <thead>
+              <tr>
+                <th>分辨率</th>
+                <th>推流倍率 (publisher)</th>
+                <th>观看倍率 (viewer)</th>
+                <th>有效推流倍率</th>
+                <th>有效观看倍率</th>
+              </tr>
+            </thead>
+            <tbody id="billingTableBody">
+              <tr><td colspan="5" class="text-center text-gray-500 py-4">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-4 flex gap-3">
+          <button class="btn-primary" onclick="saveBilling()">保存配置</button>
+        </div>
+
+        <!-- 倍率说明 -->
+        <div class="mt-6 p-4 bg-gray-900 rounded-lg">
+          <h4 class="text-sm font-semibold text-gray-300 mb-2">计费公式说明</h4>
+          <div class="text-xs text-gray-400 space-y-1">
+            <p>• <b>推流成本</b> = 实际时长(分) × 推流倍率 × 全局倍率</p>
+            <p>• <b>观看成本</b> = 实际时长(分) × 观看倍率 × 全局倍率 × 同时观众数</p>
+            <p>• <b>总消耗</b> = 推流成本 + 观看成本，从卡密配额中扣除</p>
+            <p class="mt-2">默认倍率参考声网（Agora）标准时长折算系数：</p>
+            <p>• Audio: 推流 1× / 观看 0.57×</p>
+            <p>• 720p: 推流 4× / 观看 2×</p>
+            <p>• 1080p: 推流 9× / 观看 4.57×</p>
+            <p>• 2K: 推流 16× / 观看 8×</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="genModal" class="modal-bg hidden" onclick="if(event.target===this)closeGenModal()">
+  <div class="modal">
+    <h2 class="text-lg font-semibold mb-4 text-green-400">✅ 卡密生成成功</h2>
+    <p class="text-sm text-gray-400 mb-3">以下卡密仅显示一次，请立即复制保存：</p>
+    <div id="genResult" class="bg-gray-900 rounded p-3 font-mono text-sm text-cyan-300 max-h-60 overflow-y-auto whitespace-pre"></div>
+    <div class="flex gap-3 mt-4">
+      <button class="btn-primary flex-1" onclick="copyGenResult()">复制全部</button>
+      <button class="btn-info flex-1" onclick="closeGenModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 续期弹窗 ── -->
+<div id="renewModal" class="modal-bg hidden" onclick="if(event.target===this)closeRenewModal()">
+  <div class="modal">
+    <h2 class="text-lg font-semibold mb-4">续期卡密 <span id="renewCardDisplay" class="text-cyan-300 font-mono text-base"></span></h2>
+    <div class="space-y-3">
+      <div>
+        <label class="text-xs text-gray-400 mb-1 block">续期天数（在现有到期时间基础上增加）</label>
+        <input id="renewDays" type="number" value="30" min="1">
+      </div>
+      <div class="flex gap-3">
+        <button class="btn-primary flex-1" onclick="doRenew()">确认续期</button>
+        <button class="btn-info flex-1" onclick="closeRenewModal()">取消</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 充值配额弹窗 ── -->
+<div id="rechargeModal" class="modal-bg hidden" onclick="if(event.target===this)closeRechargeModal()">
+  <div class="modal">
+    <h2 class="text-lg font-semibold mb-4">充值配额 <span id="rechargeCardDisplay" class="text-cyan-300 font-mono text-base"></span></h2>
+    <div class="space-y-3">
+      <div>
+        <label class="text-xs text-gray-400 mb-1 block">充值标准分钟数（在现有配额基础上增加）</label>
+        <input id="rechargeMinutes" type="number" value="5000" min="100">
+      </div>
+      <div class="flex items-center gap-2 mt-2">
+        <input id="rechargeReset" type="checkbox" class="w-4 h-4" style="width:auto">
+        <label for="rechargeReset" class="text-sm text-gray-400">同时重置已用量为 0</label>
+      </div>
+      <div class="flex gap-3">
+        <button class="btn-primary flex-1" onclick="doRecharge()">确认充值</button>
+        <button class="btn-info flex-1" onclick="closeRechargeModal()">取消</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 用量日志弹窗 ── -->
+<div id="usageModal" class="modal-bg hidden" onclick="if(event.target===this)closeUsageModal()">
+  <div class="modal" style="width:700px">
+    <h2 class="text-lg font-semibold mb-4">用量日志 <span id="usageCardId" class="text-cyan-300 text-base"></span></h2>
+    <div class="overflow-x-auto max-h-96 overflow-y-auto">
+      <table>
+        <thead>
+          <tr>
+            <th>时间</th><th>频道</th><th>分辨率</th><th>时长(秒)</th>
+            <th>推流</th><th>观看</th><th>总扣除</th><th>峰值观众</th>
+          </tr>
+        </thead>
+        <tbody id="usageTableBody">
+          <tr><td colspan="8" class="text-center text-gray-500 py-4">加载中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="mt-4 text-right">
+      <button class="btn-info" onclick="closeUsageModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .tab-btn { color: #9ca3af; }
+  .tab-btn.active { color: #60a5fa; border-bottom: 2px solid #2563eb; }
+</style>
+
+<script>
+const API = '';  // 同源请求，无需前缀
+let currentPage = 1;
+let renewingId = null;
+
+// ── 工具：HTML 转义（防 XSS） ───────────────────────────────
+function h(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
+// ── 初始化 ──────────────────────────────────────────────
+window.onload = () => {
+  tryAutoLogin();
+};
+
+async function tryAutoLogin() {
+  // Cookie 自动携带，登录状态由服务端判断
+  const r = await fetch('/admin/api/me');
+  if (r.ok) {
+    const j = await r.json();
+    document.getElementById('adminName').textContent = j.data?.username || 'admin';
+    showMain();
+  }
+  // 401 则停留登录页，无需清除任何本地状态
+}
+
+async function doLogin() {
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPass').value;
+  const errEl    = document.getElementById('loginErr');
+  errEl.classList.add('hidden');
+  if (!username || !password) { showErr('请输入账号和密码'); return; }
+
+  const r = await fetch('/admin/api/auth', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  const j = await r.json();
+  if (!j.success) { showErr(j.error || '登录失败'); return; }
+
+  // Cookie 由服务端设置（HttpOnly），前端不需要保存 token
+  document.getElementById('adminName').textContent = username;
+  showMain();
+}
+
+function showErr(msg) {
+  const el = document.getElementById('loginErr');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+document.getElementById('loginPass').addEventListener('keyup', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+function showMain() {
+  document.getElementById('loginPage').classList.add('hidden');
+  document.getElementById('mainPage').classList.remove('hidden');
+  loadCards();
+}
+
+function logout() {
+  // 通知服务端清除 Cookie
+  fetch('/admin/api/logout', { method: 'POST' }).finally(() => location.reload());
+}
+
+// ── 标签页 ──────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+  ['cards', 'sessions', 'billing'].forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('hidden', tab !== t);
+  });
+  if (tab === 'sessions') loadSessions();
+  if (tab === 'billing') loadBilling();
+}
+
+// ── 工具 ────────────────────────────────────────────────
+function authHeaders() {
+  // Cookie 自动携带，仅需设置 Content-Type
+  return { 'Content-Type': 'application/json' };
+}
+
+function fmtDate(ts) {
+  if (!ts) return '<span class="text-gray-600">未激活</span>';
+  return new Date(ts * 1000).toLocaleString('zh-CN');
+}
+
+function fmtStatus(c) {
+  const now = Date.now() / 1000;
+  if (c.is_banned)      return '<span class="tag tag-banned">封禁</span>';
+  if (!c.activated_at)  return '<span class="tag tag-unused">未激活</span>';
+  if (c.expires_at && c.expires_at < now) return '<span class="tag tag-expired">已过期</span>';
+  return '<span class="tag tag-active">有效</span>';
+}
+
+// ── 卡密列表 ─────────────────────────────────────────────
+async function loadCards(page = currentPage) {
+  currentPage = page;
+  const r = await fetch(`/admin/api/cards?page=${page}&limit=50`);
+  if (r.status === 401) { location.reload(); return; }
+  const j = await r.json();
+  if (!j.success) return;
+
+  const { cards, total } = j.data;
+  const tbody = document.getElementById('cardTableBody');
+
+  if (cards.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-gray-500 py-8">暂无卡密，点击"生成卡密"创建</td></tr>';
+  } else {
+    tbody.innerHTML = cards.map(c => {
+      const used = Number(c.used_minutes || 0);
+      const total = Number(c.quota_minutes || 0);
+      const remaining = Math.max(0, total - used);
+      const pct = total > 0 ? (used / total * 100) : 0;
+      const quotaColor = pct >= 100 ? 'text-red-400' : pct >= 80 ? 'text-yellow-400' : 'text-green-400';
+      return `
+      <tr>
+        <td class="text-gray-500 font-mono">${Number(c.id)}</td>
+        <td class="font-mono text-cyan-300">${h(c.key_display)}</td>
+        <td class="text-gray-400 text-xs">${h(c.label) || '--'}</td>
+        <td>${fmtStatus(c)}</td>
+        <td class="text-xs">
+          <span class="${quotaColor}">${used.toFixed(1)}</span>
+          <span class="text-gray-600">/</span>
+          <span class="text-gray-300">${total.toFixed(0)}</span>
+          <div class="w-full bg-gray-700 rounded-full h-1.5 mt-1">
+            <div class="h-1.5 rounded-full ${pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-yellow-500' : 'bg-green-500'}" style="width:${Math.min(100, pct).toFixed(1)}%"></div>
+          </div>
+        </td>
+        <td class="text-xs text-gray-400">${fmtDate(c.activated_at)}</td>
+        <td class="text-xs ${c.expires_at && c.expires_at < Date.now()/1000 ? 'text-red-400' : 'text-gray-300'}">${fmtDate(c.expires_at)}</td>
+        <td class="text-gray-400">${Number(c.device_count ?? 0)}/${Number(c.max_devices)}</td>
+        <td>
+          <div class="flex gap-1 flex-wrap">
+            <button class="btn-info" onclick="openRenew(${Number(c.id)},'${h(c.key_display)}')">续期</button>
+            <button class="btn-success" onclick="openRecharge(${Number(c.id)},'${h(c.key_display)}')">充值</button>
+            <button class="btn-info" onclick="openUsageLogs(${Number(c.id)})">用量</button>
+            ${c.allow_remote_control
+              ? `<button class="btn-danger" onclick="toggleRemoteControl(${Number(c.id)},false)" title="禁用远程控制">🎮关</button>`
+              : `<button class="btn-info" onclick="toggleRemoteControl(${Number(c.id)},true)" title="启用远程控制">🎮开</button>`}
+            ${c.is_banned
+              ? `<button class="btn-success" onclick="toggleBan(${Number(c.id)},false)">解封</button>`
+              : `<button class="btn-danger"  onclick="toggleBan(${Number(c.id)},true)">封禁</button>`}
+            <button class="btn-danger" onclick="delCard(${Number(c.id)})">删除</button>
+          </div>
+        </td>
+      </tr>
+    `}).join('');
+  }
+
+  // 分页
+  const pages = Math.ceil(total / 50);
+  document.getElementById('cardPagination').innerHTML =
+    `共 ${total} 张卡密` +
+    (pages > 1 ? `　<span>第 ${page}/${pages} 页</span>
+      <div class="flex gap-2">
+        ${page > 1 ? `<button class="btn-info" onclick="loadCards(${page-1})">上一页</button>` : ''}
+        ${page < pages ? `<button class="btn-info" onclick="loadCards(${page+1})">下一页</button>` : ''}
+      </div>` : '');
+}
+
+// ── 生成卡密 ─────────────────────────────────────────────
+async function generateCards() {
+  const count        = parseInt(document.getElementById('genCount').value) || 1;
+  const days         = parseInt(document.getElementById('genDays').value) || 30;
+  const devices      = parseInt(document.getElementById('genDevices').value) || 1;
+  const quotaMinutes = parseInt(document.getElementById('genQuota').value) || 10000;
+  const label        = document.getElementById('genLabel').value.trim();
+
+  const r = await fetch('/admin/api/cards', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ count, durationDays: days, maxDevices: devices, quotaMinutes, label }),
+  });
+  const j = await r.json();
+  if (!j.success) { alert('生成失败: ' + j.error); return; }
+
+  document.getElementById('genResult').textContent = j.data.cards.join('\n');
+  document.getElementById('genModal').classList.remove('hidden');
+  loadCards(1);
+}
+
+function closeGenModal() { document.getElementById('genModal').classList.add('hidden'); }
+function copyGenResult() {
+  const text = document.getElementById('genResult').textContent;
+  navigator.clipboard.writeText(text).then(() => alert('已复制！'));
+}
+
+// ── 封禁/解封 ────────────────────────────────────────────
+async function toggleBan(id, ban) {
+  if (!confirm(ban ? `确定封禁卡密 ID: ${id}？` : `确定解封卡密 ID: ${id}？`)) return;
+  const r = await fetch(`/admin/api/cards/${id}`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ isBanned: ban }),
+  });
+  const j = await r.json();
+  if (!j.success) { alert('操作失败: ' + j.error); return; }
+  loadCards();
+}
+
+// ── 远程控制权限 ────────────────────────────────────────
+async function toggleRemoteControl(id, enable) {
+  const r = await fetch(`/admin/api/cards/${id}`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ allowRemoteControl: enable ? 1 : 0 }),
+  });
+  const j = await r.json();
+  if (!j.success) { alert('操作失败: ' + j.error); return; }
+  loadCards();
+}
+
+// ── 续期 ────────────────────────────────────────────────
+function openRenew(id, display) {
+  renewingId = Number(id);
+  // display 已由 h() 转义，直接用 textContent 再赋一次原始值
+  document.getElementById('renewCardDisplay').textContent = display;
+  document.getElementById('renewDays').value = '30';
+  document.getElementById('renewModal').classList.remove('hidden');
+}
+function closeRenewModal() { document.getElementById('renewModal').classList.add('hidden'); renewingId = null; }
+
+async function doRenew() {
+  const days = parseInt(document.getElementById('renewDays').value) || 30;
+  const r = await fetch(`/admin/api/cards/${renewingId}`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ additionalDays: days }),
+  });
+  const j = await r.json();
+  if (!j.success) { alert('续期失败: ' + j.error); return; }
+  closeRenewModal();
+  loadCards();
+}
+
+// ── 充值配额 ────────────────────────────────────────────
+let rechargingId = null;
+function openRecharge(id, display) {
+  rechargingId = Number(id);
+  document.getElementById('rechargeCardDisplay').textContent = display;
+  document.getElementById('rechargeMinutes').value = '5000';
+  document.getElementById('rechargeReset').checked = false;
+  document.getElementById('rechargeModal').classList.remove('hidden');
+}
+function closeRechargeModal() { document.getElementById('rechargeModal').classList.add('hidden'); rechargingId = null; }
+
+async function doRecharge() {
+  const minutes = parseInt(document.getElementById('rechargeMinutes').value) || 5000;
+  const resetUsage = document.getElementById('rechargeReset').checked;
+  const body = { rechargeMinutes: minutes };
+  if (resetUsage) body.resetUsage = true;
+  const r = await fetch(`/admin/api/cards/${rechargingId}`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
+  const j = await r.json();
+  if (!j.success) { alert('充值失败: ' + j.error); return; }
+  closeRechargeModal();
+  loadCards();
+}
+
+// ── 用量日志 ────────────────────────────────────────────
+function closeUsageModal() { document.getElementById('usageModal').classList.add('hidden'); }
+
+async function openUsageLogs(id) {
+  document.getElementById('usageCardId').textContent = `#${id}`;
+  document.getElementById('usageTableBody').innerHTML = '<tr><td colspan="8" class="text-center text-gray-500 py-4">加载中...</td></tr>';
+  document.getElementById('usageModal').classList.remove('hidden');
+
+  const r = await fetch(`/admin/api/cards/${id}/usage`);
+  if (!r.ok) { document.getElementById('usageTableBody').innerHTML = '<tr><td colspan="8" class="text-center text-red-400 py-4">加载失败</td></tr>'; return; }
+  const j = await r.json();
+  if (!j.success || !j.data.length) {
+    document.getElementById('usageTableBody').innerHTML = '<tr><td colspan="8" class="text-center text-gray-500 py-4">暂无用量记录</td></tr>';
+    return;
+  }
+
+  document.getElementById('usageTableBody').innerHTML = j.data.map(log => `
+    <tr>
+      <td class="text-xs text-gray-400">${fmtDate(log.created_at)}</td>
+      <td class="text-xs font-mono text-cyan-300">${h(log.channel_id || '--')}</td>
+      <td class="text-xs text-gray-300">${h(log.resolution || '--')}</td>
+      <td class="text-xs text-gray-300">${Number(log.duration_sec || 0).toFixed(0)}</td>
+      <td class="text-xs text-gray-300">${Number(log.pub_std_minutes || 0).toFixed(2)}</td>
+      <td class="text-xs text-gray-300">${Number(log.view_std_minutes || 0).toFixed(2)}</td>
+      <td class="text-xs text-yellow-400 font-semibold">${Number(log.total_std_minutes || 0).toFixed(2)}</td>
+      <td class="text-xs text-gray-300">${Number(log.peak_viewers || 0)}</td>
+    </tr>
+  `).join('');
+}
+
+// ── 删除卡密 ────────────────────────────────────────────
+async function delCard(id) {
+  if (!confirm(`确定删除卡密 ID: ${id}？此操作不可恢复，关联会话将失效！`)) return;
+  const r = await fetch(`/admin/api/cards/${id}`, { method: 'DELETE', headers: authHeaders() });
+  const j = await r.json();
+  if (!j.success) { alert('删除失败: ' + j.error); return; }
+  loadCards();
+}
+
+// ── 在线会话 ─────────────────────────────────────────────
+async function loadSessions() {
+  const r = await fetch('/admin/api/sessions');
+  if (r.status === 401) { location.reload(); return; }
+  const j = await r.json();
+  if (!j.success) return;
+
+  const tbody = document.getElementById('sessionTableBody');
+  const onlyOnline = document.getElementById('sessionsOnlyOnline').checked;
+  let sessions = j.data;
+  if (onlyOnline) sessions = sessions.filter(s => s.is_online);
+  if (sessions.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-500 py-8">暂无' + (onlyOnline ? '在线' : '') + '会话</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = sessions.map(s => {
+    const dot = s.is_online
+      ? '<span class="inline-block w-2 h-2 rounded-full bg-green-400" title="在线"></span>'
+      : '<span class="inline-block w-2 h-2 rounded-full bg-gray-600" title="离线"></span>';
+    return `
+    <tr${s.is_online ? '' : ' class="opacity-60"'}>
+      <td class="text-center">${dot}</td>
+      <td class="font-mono text-cyan-300 text-xs">${h(s.key_display)}</td>
+      <td class="text-gray-400 text-xs">${h(s.label) || '--'}</td>
+      <td class="font-mono text-xs text-gray-400">${h(s.device_id.slice(0, 16))}...</td>
+      <td class="text-xs text-gray-400">${fmtDate(s.created_at)}</td>
+      <td class="text-xs text-gray-400">${fmtDate(s.last_seen)}</td>
+      <td class="text-xs text-gray-400">${fmtDate(s.expires_at)}</td>
+      <td>
+        <button class="btn-danger" data-token="${h(s.session_token)}" onclick="kickSession(this.dataset.token)">强制下线</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function kickSession(token) {
+  if (!confirm('确定强制下线该会话？')) return;
+  const r = await fetch('/admin/api/sessions', {
+    method: 'DELETE',
+    headers: authHeaders(),
+    body: JSON.stringify({ token }),
+  });
+  const j = await r.json();
+  if (!j.success) { alert('操作失败: ' + j.error); return; }
+  loadSessions();
+}
+
+// ── 计费倍率配置 ─────────────────────────────────────────
+let billingDefaults = null;
+
+async function loadBilling() {
+  const tbody = document.getElementById('billingTableBody');
+  tbody.innerHTML = '<tr><td colspan="5" class="text-center text-gray-500 py-4">加载中...</td></tr>';
+  try {
+    const r = await fetch('/admin/api/billing');
+    if (!r.ok) throw new Error('请求失败');
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error);
+
+    billingDefaults = j.defaults;
+    const cfg = j.data;
+    document.getElementById('billingGlobal').value = cfg.globalMultiplier ?? 1.0;
+
+    const RESOLUTIONS = [
+      { key: 'audio', label: 'Audio (纯音频)' },
+      { key: '720p',  label: '720p (高清)' },
+      { key: '1080p', label: '1080p (全高清)' },
+      { key: '2k',    label: '2K (超高清)' },
+    ];
+    const g = cfg.globalMultiplier || 1.0;
+    tbody.innerHTML = RESOLUTIONS.map(r => {
+      const v = (cfg.resolution && cfg.resolution[r.key]) || billingDefaults[r.key] || { publisher: 0, viewer: 0 };
+      return `
+      <tr>
+        <td class="text-sm text-white font-medium">${r.label}</td>
+        <td><input type="number" step="0.01" min="0" value="${v.publisher}" data-res="${r.key}" data-role="publisher" style="width:100px" class="billing-input"></td>
+        <td><input type="number" step="0.01" min="0" value="${v.viewer}"    data-res="${r.key}" data-role="viewer"    style="width:100px" class="billing-input"></td>
+        <td class="text-xs text-cyan-300 font-mono eff-pub" data-res="${r.key}">${(v.publisher * g).toFixed(2)}</td>
+        <td class="text-xs text-cyan-300 font-mono eff-view" data-res="${r.key}">${(v.viewer * g).toFixed(2)}</td>
+      </tr>`;
+    }).join('');
+
+    // 实时更新有效倍率
+    document.querySelectorAll('.billing-input, #billingGlobal').forEach(el => {
+      el.addEventListener('input', updateEffectiveMult);
+    });
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center text-red-400 py-4">加载失败: ${h(e.message)}</td></tr>`;
+  }
+}
+
+function updateEffectiveMult() {
+  const g = parseFloat(document.getElementById('billingGlobal').value) || 0;
+  document.querySelectorAll('.billing-input').forEach(el => {
+    const res = el.dataset.res;
+    const role = el.dataset.role;
+    const val = parseFloat(el.value) || 0;
+    const cell = document.querySelector(`.eff-${role === 'publisher' ? 'pub' : 'view'}[data-res="${res}"]`);
+    if (cell) cell.textContent = (val * g).toFixed(2);
+  });
+}
+
+async function saveBilling() {
+  const globalMultiplier = parseFloat(document.getElementById('billingGlobal').value);
+  if (!Number.isFinite(globalMultiplier) || globalMultiplier < 0 || globalMultiplier > 100) {
+    alert('全局倍率必须在 0~100 之间');
+    return;
+  }
+  const resolution = {};
+  document.querySelectorAll('.billing-input').forEach(el => {
+    const res = el.dataset.res;
+    const role = el.dataset.role;
+    if (!resolution[res]) resolution[res] = {};
+    resolution[res][role] = parseFloat(el.value) || 0;
+  });
+
+  try {
+    const r = await fetch('/admin/api/billing', {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify({ globalMultiplier, resolution }),
+    });
+    const j = await r.json();
+    if (!j.success) { alert('保存失败: ' + j.error); return; }
+    alert('✅ 计费倍率已保存');
+    loadBilling();
+  } catch(e) {
+    alert('请求失败: ' + e.message);
+  }
+}
+
+async function resetBilling() {
+  if (!confirm('确定恢复为默认计费倍率？此操作不可撤销。')) return;
+  try {
+    const r = await fetch('/admin/api/billing/reset', {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    const j = await r.json();
+    if (!j.success) { alert('重置失败: ' + j.error); return; }
+    alert('✅ 已恢复默认计费倍率');
+    loadBilling();
+  } catch(e) {
+    alert('请求失败: ' + e.message);
+  }
+}
+
+</script>
+</body>
+</html>

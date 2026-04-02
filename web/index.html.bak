@@ -1,0 +1,1322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Windows 主进程(Rundll32)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha384-t1nt8BQoYMLFN5p42tRAtuAAFQaCQODekUVeKKZrEnEyp4H2R0RHFz0KWpmj7i8g" crossorigin="anonymous">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-[#030712] text-white h-screen flex flex-col overflow-hidden select-none">
+
+  <!-- ==================== 登录遮罩（每次启动显示） ==================== -->
+  <div id="loginOverlay" class="fixed inset-0 bg-[#030712] z-50 flex items-center justify-center p-4">
+    <div class="w-full max-w-sm">
+      <!-- Logo -->
+      <div class="text-center mb-10">
+        <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-2xl mx-auto mb-4 shadow-lg shadow-blue-500/20">M</div>
+        <h1 class="text-2xl font-bold text-white tracking-wide">MDShare</h1>
+        <p class="text-gray-500 text-sm mt-1">设备控制台</p>
+      </div>
+
+      <!-- 卡密输入 -->
+      <div class="space-y-4">
+        <div>
+          <label class="text-xs text-gray-400 mb-1.5 block font-medium">授权卡密</label>
+          <input
+            id="loginCardKey"
+            type="text"
+            placeholder="MDSH-XXXXXXXX-XXXXXXXX"
+            class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors placeholder:text-gray-600"
+            autocomplete="off"
+            spellcheck="false"
+          >
+        </div>
+
+        <!-- 设备码 -->
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] text-gray-600">设备码</span>
+          <span id="loginDeviceId" class="text-[11px] text-gray-600 font-mono">获取中...</span>
+        </div>
+
+        <!-- 登录按钮 -->
+        <button
+          id="loginBtn"
+          class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+        >
+          <i class="fas fa-sign-in-alt"></i>
+          登 录
+        </button>
+
+        <!-- 错误/状态提示 -->
+        <div id="loginStatus" class="text-center text-sm min-h-[20px]"></div>
+
+        <!-- 登录成功后显示有效期 -->
+        <div id="loginExpiry" class="hidden text-center text-xs text-green-400">
+          <i class="fas fa-check-circle mr-1"></i>
+          <span id="loginExpiryText"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== 顶部栏 ==================== -->
+  <header class="h-16 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-3 md:px-6 shrink-0 z-20">
+    <!-- 左侧：Logo + 设备信息 -->
+    <div class="flex items-center gap-2 md:gap-6">
+      <div class="flex items-center gap-2 md:gap-3 shrink-0">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-sm">M</div>
+        <div class="hidden md:flex flex-col justify-center">
+          <span class="text-white font-bold text-sm tracking-wide">MDShare</span>
+          <span class="text-[10px] text-gray-500">设备控制台</span>
+        </div>
+      </div>
+      <div class="w-px h-8 bg-gray-800 hidden md:block"></div>
+      <div class="flex flex-col justify-center">
+        <div class="flex items-center gap-2 md:gap-3 mb-0.5">
+          <span id="deviceName" class="text-sm font-medium text-cyan-300 cursor-pointer hover:text-cyan-200 transition-colors" title="点击修改备注">
+            加载中...
+          </span>
+          <span id="connectionTag" class="text-[9px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-400 font-medium">
+            离线
+          </span>
+        </div>
+        <div class="flex items-center gap-2 md:gap-4 text-[10px] md:text-xs text-gray-400">
+          <span id="headerScreenQuota">屏幕分享: <span class="text-green-400">可用</span></span>
+          <span class="hidden md:inline text-gray-600">|</span>
+          <span id="ipLocation" class="hidden md:inline">--</span>
+          <span id="deviceIP" class="hidden md:inline text-gray-500">--</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右侧：操作按钮 -->
+    <div class="flex items-center gap-2 md:gap-3">
+      <button id="btnShareLink" class="flex items-center gap-1.5 text-gray-400 hover:text-blue-400 px-2.5 py-1.5 rounded hover:bg-gray-800 transition-colors text-sm" title="分享链接">
+        <i class="fas fa-share-alt"></i>
+        <span class="hidden md:inline">分享</span>
+      </button>
+      <button id="btnOpenBrowser" class="flex items-center gap-1.5 text-gray-400 hover:text-green-400 px-2.5 py-1.5 rounded hover:bg-gray-800 transition-colors text-sm" title="打开网页版">
+        <i class="fas fa-globe"></i>
+        <span class="hidden md:inline">网页</span>
+      </button>
+      <button id="startupModeBtn" class="flex items-center gap-1.5 hover:text-cyan-400 px-2.5 py-1.5 rounded hover:bg-gray-800 transition-colors text-sm text-cyan-400" title="切换启动模式">
+        <i id="startupModeIcon" class="fas fa-play-circle"></i>
+        <span id="startupModeText" class="hidden md:inline">自动</span>
+      </button>
+      <button id="btnHideToBackground" class="flex items-center gap-1.5 text-gray-400 hover:text-blue-400 px-2.5 py-1.5 rounded hover:bg-gray-800 transition-colors text-sm" title="最小化到后台 (Ctrl+Shift+M 恢复)">
+        <i class="fas fa-eye-slash"></i>
+        <span class="hidden md:inline">后台</span>
+      </button>
+      <button id="btnClose" class="flex items-center gap-1.5 text-gray-400 hover:text-red-400 px-2.5 py-1.5 rounded hover:bg-gray-800 transition-colors text-sm" title="关闭客户端">
+        <i class="fas fa-power-off"></i>
+        <span class="hidden md:inline">关闭</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ==================== 主体区域 ==================== -->
+  <div class="flex-1 flex overflow-hidden relative">
+
+    <!-- ========== 左侧导航栏 ========== -->
+    <nav class="w-16 bg-gray-900 border-r border-gray-800 flex-col shrink-0 hidden md:flex z-10 overflow-y-auto no-scrollbar">
+      <div class="nav-item active" data-view="overview">
+        <i class="fas fa-tachometer-alt"></i>
+        <span>总览</span>
+      </div>
+      <div class="nav-item" data-view="cleanup">
+        <i class="fas fa-broom"></i>
+        <span>硬件优化</span>
+      </div>
+      <div class="nav-item" data-view="software-optimize">
+        <i class="fas fa-broom"></i>
+        <span>软件优化</span>
+      </div>
+      <div class="nav-item" data-view="browser_history">
+        <i class="fab fa-chrome"></i>
+        <span>浏览器</span>
+      </div>
+      <div class="nav-item" data-view="transfer">
+        <i class="fas fa-folder-tree"></i>
+        <span>文件互传</span>
+      </div>
+      <div class="nav-item" data-view="perf-migration">
+        <i class="fas fa-file-export"></i>
+        <span>日志迁移</span>
+      </div>
+      <div class="nav-item" data-view="screen">
+        <i class="fas fa-desktop"></i>
+        <span>屏幕共享</span>
+      </div>
+      <div class="nav-item" data-view="kiosk">
+        <i class="fas fa-tv"></i>
+        <span>屏享观看</span>
+      </div>
+      <div class="nav-item" data-view="network-usage">
+        <i class="fas fa-chart-line"></i>
+        <span>网络用量</span>
+      </div>
+      <div class="nav-item" data-view="tsay">
+        <i class="fas fa-comments"></i>
+        <span>消息</span>
+      </div>
+      <div class="nav-item" data-view="process">
+        <i class="fas fa-diagram-project"></i>
+        <span>进程</span>
+      </div>
+      <div class="nav-item" data-view="terminal">
+        <i class="fas fa-terminal"></i>
+        <span>终端</span>
+      </div>
+      <div class="nav-item" data-view="registry">
+        <i class="fas fa-cubes"></i>
+        <span>注册表</span>
+      </div>
+      <div class="nav-item" data-view="startup">
+        <i class="fas fa-window-restore"></i>
+        <span>启动项</span>
+      </div>
+      <div class="nav-item" data-view="content-filter">
+        <i class="fas fa-shield-alt"></i>
+        <span>内容过滤</span>
+      </div>
+    </nav>
+
+    <!-- ========== 主内容区 ========== -->
+    <main class="flex-1 bg-[#030712] relative overflow-hidden flex flex-col">
+
+      <!-- ========== 总览 ========== -->
+      <div id="overview" class="view-section active p-4 md:p-6 overflow-y-auto lg:overflow-hidden no-scrollbar">
+        <div class="grid grid-cols-1 lg:grid-cols-3 lg:grid-rows-[auto_minmax(0,1fr)] gap-4 min-h-min lg:min-h-0 lg:h-full pb-1">
+
+          <!-- 基本信息卡片 -->
+          <div class="lg:col-span-2 bg-gray-900/50 rounded-xl border border-gray-800 p-4 md:p-5">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                <i class="fas fa-info-circle text-blue-400"></i> 基本信息
+              </h3>
+              <span id="cidDisplay" class="text-xs text-gray-500 font-mono">CID: --</span>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <div class="text-[10px] text-gray-500 mb-1">设备名称</div>
+                <div id="overview-device-name" class="text-sm text-white font-medium">--</div>
+              </div>
+              <div>
+                <div class="text-[10px] text-gray-500 mb-1">操作系统</div>
+                <div id="overview-os" class="text-sm text-white font-medium">--</div>
+              </div>
+              <div>
+                <div class="text-[10px] text-gray-500 mb-1">网络位置</div>
+                <div id="overview-ip-address" class="text-sm text-white font-medium">--</div>
+                <div id="overview-ip-location" class="text-[10px] text-gray-500">--</div>
+              </div>
+              <div>
+                <div class="text-[10px] text-gray-500 mb-1">运行时长</div>
+                <div id="overview-uptime" class="text-sm text-white font-medium">--</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 电脑信息总览卡片 -->
+          <div class="lg:row-span-2 bg-gray-900/50 rounded-xl border border-gray-800 p-4 md:p-5 overflow-y-auto custom-scrollbar">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                <i class="fas fa-microchip text-purple-400"></i> 电脑信息总览
+              </h3>
+              <button id="btnCopyConfig" class="text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-300 px-2 py-1 rounded border border-gray-700 transition-colors">
+                复制配置
+              </button>
+            </div>
+
+            <!-- 用户信息 -->
+            <h4 class="text-xs font-semibold text-gray-400 border-b border-gray-800 pb-2 mb-3 flex items-center gap-2">
+              <i class="fas fa-user text-blue-400/60"></i> 用户信息
+            </h4>
+            <div class="space-y-2 mb-5">
+              <div class="flex justify-between text-xs">
+                <span class="text-gray-500">计算机名\用户名</span>
+                <span id="deviceUsername" class="text-gray-300 font-mono text-right">--</span>
+              </div>
+              <div class="flex justify-between text-xs">
+                <span class="text-gray-500">当前权限组</span>
+                <span id="devicePermissionGroup" class="text-gray-300">--</span>
+              </div>
+            </div>
+
+            <!-- 硬件信息 -->
+            <h4 class="text-xs font-semibold text-gray-400 border-b border-gray-800 pb-2 mb-3 flex items-center gap-2">
+              <i class="fas fa-memory text-green-400/60"></i> 硬件信息
+            </h4>
+            <div class="space-y-2 mb-5">
+              <div>
+                <div class="text-[10px] text-gray-500">CPU</div>
+                <div id="deviceCPU" class="text-xs text-gray-300 break-all">--</div>
+              </div>
+              <div>
+                <div class="text-[10px] text-gray-500">内存</div>
+                <div id="deviceMemory" class="text-xs text-gray-300">--</div>
+              </div>
+              <div>
+                <div class="text-[10px] text-gray-500">显卡 (GPU)</div>
+                <div id="deviceGPU" class="text-xs text-gray-300">--</div>
+              </div>
+              <div>
+                <div class="text-[10px] text-gray-500">存储设备</div>
+                <div id="deviceStorage" class="text-xs text-gray-300">--</div>
+              </div>
+            </div>
+
+            <!-- 软件环境 -->
+            <h4 class="text-xs font-semibold text-gray-400 border-b border-gray-800 pb-2 mb-3 flex items-center gap-2">
+              <i class="fas fa-code text-cyan-400/60"></i> 软件环境
+            </h4>
+            <div class="space-y-2 mb-5">
+              <div class="flex justify-between text-xs">
+                <span class="text-gray-500">客户端版本</span>
+                <span id="deviceClientVersion" class="text-gray-300">1.0.0</span>
+              </div>
+              <div class="flex justify-between text-xs">
+                <span class="text-gray-500">操作系统</span>
+                <span id="deviceOS" class="text-gray-300">--</span>
+              </div>
+              <div class="flex justify-between text-xs">
+                <span class="text-gray-500">系统版本</span>
+                <span id="deviceOSVersion" class="text-gray-300">--</span>
+              </div>
+            </div>
+
+            <!-- 网络适配器 -->
+            <h4 class="text-xs font-semibold text-gray-400 border-b border-gray-800 pb-2 mb-3 flex items-center gap-2">
+              <i class="fas fa-network-wired text-orange-400/60"></i> 网络适配器
+            </h4>
+            <div id="deviceNetworkAdapters" class="space-y-2 text-xs text-gray-300">
+              <div class="text-gray-500">--</div>
+            </div>
+          </div>
+
+          <!-- 下半部分：最近活动 + 剪贴板/键盘记录 -->
+          <div class="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[300px] lg:min-h-0">
+
+            <!-- 最近活动 -->
+            <div class="bg-gray-900/50 rounded-xl border border-gray-800 p-4 flex flex-col min-h-[250px]">
+              <h3 class="text-sm font-semibold text-white flex items-center gap-2 mb-3 shrink-0">
+                <i class="fas fa-clock text-yellow-400"></i> 最近活动
+              </h3>
+              <div id="activityLog" class="flex-1 overflow-y-auto custom-scrollbar space-y-1 text-xs">
+                <div class="text-gray-500 text-center py-8">暂无活动记录</div>
+              </div>
+            </div>
+
+            <!-- 剪贴板 & 键盘记录 -->
+            <div class="bg-gray-900/50 rounded-xl border border-gray-800 p-4 flex flex-col min-h-[250px]">
+              <div class="flex items-center justify-between mb-3 shrink-0">
+                <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                  <i class="fas fa-clipboard text-pink-400"></i> 剪贴板 & 键盘记录
+                </h3>
+                <div class="flex items-center gap-2 text-[10px] text-gray-400">
+                  <label class="flex items-center gap-1 cursor-pointer">
+                    <input type="checkbox" id="filterClipboard" checked class="w-3 h-3 rounded accent-blue-500">
+                    剪贴板
+                  </label>
+                  <label class="flex items-center gap-1 cursor-pointer">
+                    <input type="checkbox" id="filterKeyboard" checked class="w-3 h-3 rounded accent-blue-500">
+                    键盘
+                  </label>
+                </div>
+              </div>
+              <div id="clipboardLog" class="flex-1 overflow-y-auto custom-scrollbar space-y-1 text-xs">
+                <div class="text-gray-500 text-center py-8">暂无记录</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== 硬件优化 ========== -->
+      <div id="cleanup" class="view-section w-full h-full bg-[#030712] flex flex-col">
+        <div class="h-12 border-b border-gray-800 bg-gray-900 flex items-center px-4 shrink-0">
+          <i class="fas fa-broom text-green-400 mr-2"></i>
+          <span class="text-sm font-medium">硬件优化</span>
+        </div>
+        <div class="flex-1 flex items-center justify-center">
+          <div class="text-center text-gray-500">
+            <i class="fas fa-tools text-4xl mb-4 text-gray-600"></i>
+            <p class="text-sm">硬件优化功能开发中...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== 软件优化 ========== -->
+      <div id="software-optimize" class="view-section w-full h-full bg-[#030712] flex flex-col">
+        <div class="h-12 border-b border-gray-800 bg-gray-900 flex items-center px-4 shrink-0">
+          <i class="fas fa-broom text-teal-400 mr-2"></i>
+          <span class="text-sm font-medium">软件优化</span>
+        </div>
+        <div class="flex-1 flex items-center justify-center">
+          <div class="text-center text-gray-500">
+            <i class="fas fa-cogs text-4xl mb-4 text-gray-600"></i>
+            <p class="text-sm">软件优化功能开发中...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== 浏览器 ========== -->
+      <div id="browser_history" class="view-section w-full h-full bg-[#030712] flex flex-col">
+        <div class="h-12 border-b border-gray-800 bg-gray-900 flex items-center px-4 shrink-0">
+          <i class="fab fa-chrome text-yellow-400 mr-2"></i>
+          <span class="text-sm font-medium">浏览器历史</span>
+        </div>
+        <div class="flex-1 flex items-center justify-center">
+          <div class="text-center text-gray-500">
+            <i class="fab fa-chrome text-4xl mb-4 text-gray-600"></i>
+            <p class="text-sm">浏览器管理功能开发中...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== 文件互传 ========== -->
+      <section id="transfer" class="view-section w-full h-full bg-[#030712] flex flex-col">
+        <div class="h-12 border-b border-gray-800 bg-gray-900 flex items-center px-4 shrink-0 justify-between">
+          <div class="flex items-center">
+            <i class="fas fa-folder-tree text-orange-400 mr-2"></i>
+            <span class="text-sm font-medium">文件互传</span>
+          </div>
+          <button id="btnUploadFile" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+            <i class="fas fa-upload mr-1"></i> 上传文件
+          </button>
+        </div>
+        <div class="flex-1 flex flex-col items-center justify-center p-6">
+          <div id="fileDropZone" class="w-full max-w-lg border-2 border-dashed border-gray-700 rounded-xl p-12 text-center hover:border-blue-500 transition-colors cursor-pointer">
+            <i class="fas fa-cloud-upload-alt text-5xl text-gray-600 mb-4"></i>
+            <p class="text-sm text-gray-400 mb-2">拖拽文件到此处或点击选择文件</p>
+            <p class="text-xs text-gray-600">支持任意文件类型</p>
+          </div>
+          <div id="fileTransferList" class="w-full max-w-lg mt-6 space-y-2"></div>
+        </div>
+      </section>
+
+      <!-- ========== 屏幕共享 ========== -->
+      <div id="screen" class="view-section w-full h-full bg-[#030712] flex flex-col">
+        <div class="h-12 border-b border-gray-800 bg-gray-900 flex items-center px-4 shrink-0 justify-between">
+          <div class="flex items-center gap-3">
+            <i class="fas fa-desktop text-blue-400 mr-1"></i>
+            <span class="text-sm font-medium">屏幕共享</span>
+            <span id="screenShareStatus" class="text-[10px] px-2 py-0.5 rounded bg-gray-700 text-gray-400">未共享</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <!-- 频道号（共享后显示） -->
+            <div id="channelInfoBar" class="items-center gap-2 mr-2 hidden">
+              <span class="text-[10px] text-gray-500">频道号:</span>
+              <span id="shareChannelId" class="text-sm font-bold text-cyan-400 font-mono tracking-wider">--</span>
+              <button id="btnCopyChannel" class="text-[10px] bg-gray-800 hover:bg-gray-700 text-cyan-300 px-2 py-1 rounded border border-gray-700 transition-colors">
+                <i class="fas fa-copy mr-0.5"></i> 复制
+              </button>
+            </div>
+            <button id="btnScreenConfig" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded border border-gray-700 transition-colors">
+              <i class="fas fa-cog mr-1"></i> 配置
+            </button>
+            <button id="btnStartShare" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-lg transition-colors">
+              <i class="fas fa-play mr-1"></i> 开始共享
+            </button>
+            <button id="btnStopShare" class="text-xs bg-red-600 hover:bg-red-500 text-white px-4 py-1.5 rounded-lg transition-colors hidden">
+              <i class="fas fa-stop mr-1"></i> 停止共享
+            </button>
+            <!-- 远控状态（被控端） -->
+            <span id="rcStatusBadge" class="text-[10px] px-2 py-0.5 rounded bg-yellow-900/50 text-yellow-400 hidden">
+              <i class="fas fa-hand-pointer mr-1"></i>远控中
+            </span>
+          </div>
+        </div>
+        <div id="screenContainer" class="flex-1 relative bg-gradient-to-br from-gray-950 via-[#030712] to-gray-900">
+          <!-- 未共享时的占位 -->
+          <div id="screenPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center">
+            <i class="fas fa-desktop text-6xl text-gray-700 mb-6"></i>
+            <div class="text-center">
+              <p class="text-gray-400 text-sm mb-2">点击「开始共享」分享你的屏幕</p>
+              <p class="text-gray-600 text-xs">共享后频道号将显示在顶部工具栏</p>
+            </div>
+          </div>
+          <!-- 视频预览 -->
+          <div id="localPreview" class="absolute inset-0 hidden"></div>
+          <!-- 共享统计 -->
+          <div id="screenStats" class="absolute bottom-4 left-4 bg-gray-900/80 backdrop-blur-sm border border-gray-800 rounded-lg px-3 py-2 text-[10px] text-gray-400 font-mono hidden">
+            <span class="text-cyan-400 mr-1">频道:</span>
+            <span id="screenStatsChannel" class="text-cyan-300 mr-3">--</span>
+            <span id="screenDuration">00:00</span>
+            <span class="mx-2 text-gray-600">|</span>
+            <span id="screenViewers">观看: 0</span>
+            <span id="screenViewerLoss" class="text-gray-400 ml-1 hidden">(丢包 <span id="screenViewerLossVal" class="text-red-300">--%</span> 延迟 <span id="screenViewerDelayVal" class="text-yellow-300">--ms</span>)</span>
+            <span class="mx-2 text-gray-600">|</span>
+            <span class="text-gray-500 mr-1">RTT</span>
+            <span id="statRtt" class="text-yellow-300 mr-3">--ms</span>
+            <span class="text-gray-500 mr-1">码率</span>
+            <span id="statBitrate" class="text-green-300 mr-3">-- kbps</span>
+            <span class="text-gray-500 mr-1">丢包</span>
+            <span id="statLoss" class="text-red-300 mr-3">--%</span>
+            <span class="text-gray-500 mr-1">FPS</span>
+            <span id="statFps" class="text-blue-300 mr-3">--</span>
+            <span class="text-gray-500 mr-1">编码</span>
+            <span id="statCodec" class="text-purple-300 mr-3">--</span>
+            <span class="text-gray-500 mr-1">丢弃帧</span>
+            <span id="statAbandoned" class="text-orange-300">--%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== 屏享观看 ========== -->
+      <div id="kiosk" class="view-section w-full h-full bg-[#030712] flex flex-col">
+        <div class="h-12 border-b border-gray-800 bg-gray-900 flex items-center px-4 shrink-0 justify-between">
+          <div class="flex items-center gap-3">
+            <i class="fas fa-tv text-green-400 mr-1"></i>
+            <span class="text-sm font-medium">屏享观看</span>
+            <span id="viewerStatus" class="text-[10px] px-2 py-0.5 rounded bg-gray-700 text-gray-400">未连接</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <input id="inputChannelId" type="text" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white w-40 font-mono focus:outline-none focus:border-blue-500 transition-colors" placeholder="输入频道号">
+            <button id="btnJoinChannel" class="text-xs bg-green-600 hover:bg-green-500 text-white px-4 py-1.5 rounded-lg transition-colors">
+              <i class="fas fa-sign-in-alt mr-1"></i> 加入
+            </button>
+            <button id="btnLeaveChannel" class="text-xs bg-red-600 hover:bg-red-500 text-white px-4 py-1.5 rounded-lg transition-colors hidden">
+              <i class="fas fa-sign-out-alt mr-1"></i> 离开
+            </button>
+            <!-- 麦克风按钮（观看端上行麦克风到推流端） -->
+            <button id="btnToggleMic" class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg transition-colors hidden" title="开启麦克风">
+              <i class="fas fa-microphone-slash"></i>
+            </button>
+            <!-- 下行网络质量指示 -->
+            <span id="viewerNetQuality" class="hidden text-[10px] px-2 py-1 rounded font-mono bg-gray-800 text-gray-400" title="下行网络质量">●&nbsp;--</span>
+            <button id="btnViewerFullscreen" class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg transition-colors hidden" title="全屏">
+              <i class="fas fa-expand"></i>
+            </button>
+            <!-- 键鼠锁定按钮（仅 Native 模式显示） -->
+            <button id="btnInputLock" class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg transition-colors hidden" title="锁定键鼠">
+              <i class="fas fa-lock-open"></i>
+            </button>
+            <!-- 远程控制按钮 -->
+            <button id="btnRemoteControl" class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg transition-colors hidden" title="远程控制">
+              <i class="fas fa-hand-pointer mr-1"></i> 远控
+            </button>
+          </div>
+        </div>
+        <div class="flex-1 relative bg-gradient-to-br from-gray-950 via-[#030712] to-gray-900">
+          <div id="viewerPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center">
+            <i class="fas fa-tv text-6xl text-gray-700 mb-6"></i>
+            <p class="text-gray-400 text-sm">输入频道号加入观看</p>
+          </div>
+          <div id="remoteVideo" class="absolute inset-0 hidden"></div>
+          <!-- 远控特殊键工具栏 -->
+          <div id="rcToolbar" class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-gray-900/90 backdrop-blur-sm border border-gray-700 rounded-lg px-3 py-1.5 flex items-center gap-1.5 hidden z-20 flex-wrap justify-center max-w-[90vw]">
+            <button class="rc-combo-btn" data-combo="ctrl+alt+del" title="Ctrl+Alt+Del">
+              <span class="text-[9px]">C+A+D</span>
+            </button>
+            <button class="rc-combo-btn" data-combo="alt+tab" title="Alt+Tab">
+              <span class="text-[9px]">Alt+Tab</span>
+            </button>
+            <button class="rc-combo-btn" data-combo="alt+f4" title="Alt+F4">
+              <span class="text-[9px]">Alt+F4</span>
+            </button>
+            <button class="rc-combo-btn" data-combo="alt+esc" title="Alt+Esc 切换窗口到背景">
+              <span class="text-[9px]">Alt+Esc</span>
+            </button>
+            <button class="rc-combo-btn" data-combo="win" title="Windows 键">
+              <i class="fab fa-windows text-[10px]"></i>
+            </button>
+            <button class="rc-combo-btn" data-combo="win+d" title="Win+D 显示桌面">
+              <span class="text-[9px]">Win+D</span>
+            </button>
+            <button class="rc-combo-btn" data-combo="win+e" title="Win+E 资源管理器">
+              <span class="text-[9px]">Win+E</span>
+            </button>
+            <button class="rc-combo-btn" data-combo="win+tab" title="Win+Tab 任务视图">
+              <span class="text-[9px]">Win+Tab</span>
+            </button>
+            <button class="rc-combo-btn" data-combo="win+x" title="Win+X 快捷菜单">
+              <span class="text-[9px]">Win+X</span>
+            </button>
+            <button class="rc-combo-btn" data-combo="win+i" title="Win+I 设置">
+              <span class="text-[9px]">Win+I</span>
+            </button>
+            <button class="rc-combo-btn" data-combo="win+r" title="Win+R 运行">
+              <span class="text-[9px]">Win+R</span>
+            </button>
+            <button class="rc-combo-btn" data-combo="ctrl+shift+esc" title="Ctrl+Shift+Esc 任务管理器">
+              <span class="text-[9px]">TaskMgr</span>
+            </button>
+            <div class="w-px h-4 bg-gray-600 mx-1"></div>
+            <button id="btnRcPointerLock" class="rc-combo-btn" title="鼠标锁定模式（Pointer Lock）">
+              <i class="fas fa-mouse-pointer text-[10px]"></i>
+            </button>
+            <button id="btnRcStop" class="text-[10px] bg-red-700 hover:bg-red-600 text-white px-2 py-1 rounded transition-colors" title="停止远控">
+              <i class="fas fa-stop mr-0.5"></i> 停止
+            </button>
+          </div>
+          <!-- 键鼠锁定遮罩层（已禁用，锁定状态通过按钮指示） -->
+          <!--
+          <div id="inputLockOverlay" class="input-lock-overlay hidden">
+            <div class="input-lock-badge">
+              <i class="fas fa-lock"></i>
+              <span>键鼠已锁定</span>
+              <small>Ctrl+Alt+Shift+F12 解锁</small>
+            </div>
+          </div>
+          -->
+        </div>
+      </div>
+
+      <!-- ========== 网络用量 ========== -->
+      <div id="network-usage" class="view-section w-full h-full bg-[#030712] flex flex-col">
+        <div class="h-12 border-b border-gray-800 bg-gray-900 flex items-center px-4 shrink-0">
+          <i class="fas fa-chart-line text-blue-400 mr-2"></i>
+          <span class="text-sm font-medium">网络用量</span>
+        </div>
+        <div class="flex-1 flex items-center justify-center">
+          <div class="text-center text-gray-500">
+            <i class="fas fa-chart-area text-4xl mb-4 text-gray-600"></i>
+            <p class="text-sm">网络用量统计功能开发中...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== 消息 (Tsay) ========== -->
+      <div id="tsay" class="view-section w-full h-full bg-[#030712] flex flex-col">
+        <div class="h-12 border-b border-gray-800 bg-gray-900 flex items-center px-4 shrink-0">
+          <i class="fas fa-comments text-purple-400 mr-2"></i>
+          <span class="text-sm font-medium">消息</span>
+        </div>
+        <div class="flex-1 flex flex-col">
+          <div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+            <div class="text-gray-500 text-sm text-center py-8">暂无消息</div>
+          </div>
+          <div class="border-t border-gray-800 p-3 flex gap-2">
+            <input id="chatInput" type="text" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors" placeholder="输入消息...">
+            <button id="btnSendChat" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm transition-colors">
+              <i class="fas fa-paper-plane"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== 进程 ========== -->
+      <div id="process" class="view-section w-full h-full bg-[#030712] flex flex-col">
+        <div class="h-12 border-b border-gray-800 bg-gray-900 flex items-center px-4 shrink-0 justify-between">
+          <div class="flex items-center">
+            <i class="fas fa-diagram-project text-cyan-400 mr-2"></i>
+            <span class="text-sm font-medium">进程管理</span>
+          </div>
+          <button id="btnRefreshProcess" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded border border-gray-700 transition-colors">
+            <i class="fas fa-sync-alt mr-1"></i> 刷新
+          </button>
+        </div>
+        <div class="flex-1 overflow-hidden flex flex-col">
+          <div class="px-4 py-2 border-b border-gray-800 bg-gray-900/30">
+            <input id="processSearch" type="text" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors" placeholder="搜索进程...">
+          </div>
+          <div class="flex-1 overflow-auto custom-scrollbar">
+            <table class="w-full text-xs">
+              <thead class="sticky top-0 bg-gray-900">
+                <tr class="text-gray-500 border-b border-gray-800">
+                  <th class="text-left px-4 py-2 font-medium">进程名</th>
+                  <th class="text-left px-4 py-2 font-medium">PID</th>
+                  <th class="text-left px-4 py-2 font-medium">内存</th>
+                  <th class="text-left px-4 py-2 font-medium">CPU</th>
+                  <th class="text-right px-4 py-2 font-medium">操作</th>
+                </tr>
+              </thead>
+              <tbody id="processTableBody" class="text-gray-300">
+                <tr><td colspan="5" class="text-center text-gray-500 py-8">点击刷新获取进程列表</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== 终端 ========== -->
+      <div id="terminal" class="view-section w-full h-full bg-black flex flex-col">
+        <div class="h-12 border-b border-gray-800 bg-gray-900 flex items-center px-4 shrink-0 justify-between">
+          <div class="flex items-center">
+            <i class="fas fa-terminal text-green-400 mr-2"></i>
+            <span class="text-sm font-medium">远程终端</span>
+          </div>
+          <button id="btnClearTerminal" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded border border-gray-700 transition-colors">
+            <i class="fas fa-eraser mr-1"></i> 清屏
+          </button>
+        </div>
+        <div id="terminalOutput" class="flex-1 overflow-y-auto p-4 font-mono text-xs text-green-400 custom-scrollbar whitespace-pre-wrap">
+Microsoft Windows [Version 10.0.22631]
+(c) Microsoft Corporation. All rights reserved.
+
+C:\Users\User>
+        </div>
+        <div class="border-t border-gray-800 p-2 flex gap-2">
+          <span class="text-green-400 text-xs font-mono py-1.5 pl-2">$</span>
+          <input id="terminalInput" type="text" class="flex-1 bg-transparent text-green-400 text-xs font-mono focus:outline-none" placeholder="输入命令..." autocomplete="off">
+        </div>
+      </div>
+
+      <!-- ========== 注册表 ========== -->
+      <div id="registry" class="view-section w-full h-full bg-[#030712] flex flex-col">
+        <div class="h-12 border-b border-gray-800 bg-gray-900 flex items-center px-4 shrink-0">
+          <i class="fas fa-cubes text-amber-400 mr-2"></i>
+          <span class="text-sm font-medium">注册表</span>
+        </div>
+        <div class="flex-1 flex items-center justify-center">
+          <div class="text-center text-gray-500">
+            <i class="fas fa-cubes text-4xl mb-4 text-gray-600"></i>
+            <p class="text-sm">注册表管理功能开发中...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== 启动项 ========== -->
+      <div id="startup" class="view-section w-full h-full bg-[#030712] flex flex-col">
+        <div class="h-12 border-b border-gray-800 bg-gray-900 flex items-center px-4 shrink-0">
+          <i class="fas fa-window-restore text-indigo-400 mr-2"></i>
+          <span class="text-sm font-medium">启动项管理</span>
+        </div>
+        <div class="flex-1 flex items-center justify-center">
+          <div class="text-center text-gray-500">
+            <i class="fas fa-window-restore text-4xl mb-4 text-gray-600"></i>
+            <p class="text-sm">启动项管理功能开发中...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== 内容过滤 ========== -->
+      <div id="content-filter" class="view-section w-full h-full bg-[#030712] flex flex-col">
+        <div class="h-12 border-b border-gray-800 bg-gray-900 flex items-center px-4 shrink-0">
+          <i class="fas fa-shield-alt text-red-400 mr-2"></i>
+          <span class="text-sm font-medium">内容过滤</span>
+        </div>
+        <div class="flex-1 flex items-center justify-center">
+          <div class="text-center text-gray-500">
+            <i class="fas fa-shield-alt text-4xl mb-4 text-gray-600"></i>
+            <p class="text-sm">内容过滤功能开发中...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== 日志迁移 ========== -->
+      <div id="perf-migration" class="view-section w-full h-full bg-[#030712] flex flex-col">
+        <div class="h-12 border-b border-gray-800 bg-gray-900 flex items-center px-4 shrink-0 justify-between">
+          <div class="flex items-center">
+            <i class="fas fa-file-export text-emerald-400 mr-2"></i>
+            <span class="text-sm font-medium">日志迁移 (Performance Data)</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span id="perfDriverBadge" class="hidden text-[10px] px-2 py-0.5 rounded bg-gray-800 text-gray-400">
+              <i class="fas fa-microchip mr-1"></i>驱动: --
+            </span>
+          </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto no-scrollbar p-4 md:p-6">
+          <!-- 模式选择 -->
+          <div id="perfModeSelect" class="max-w-2xl mx-auto">
+            <div class="text-center mb-8">
+              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-2xl mx-auto mb-4 shadow-lg shadow-emerald-500/20">
+                <i class="fas fa-exchange-alt"></i>
+              </div>
+              <h2 class="text-xl font-bold text-white mb-2">日志迁移工具</h2>
+              <p class="text-sm text-gray-400">将日志文件从一台设备转移到另一台，支持 perf_data 和 WeGame QQ 登录日志</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <!-- 发送方 -->
+              <div id="perfBtnSender" class="group cursor-pointer bg-gray-900/60 border border-gray-800 hover:border-blue-500/50 rounded-xl p-6 transition-all hover:shadow-lg hover:shadow-blue-500/5">
+                <div class="flex items-center gap-3 mb-3">
+                  <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:bg-blue-500/20 transition-colors">
+                    <i class="fas fa-upload text-lg"></i>
+                  </div>
+                  <h3 class="text-base font-semibold text-white">Perf 发送方</h3>
+                </div>
+                <p class="text-xs text-gray-400 leading-relaxed">扫描本机 perf_data 文件，打包上传到中转服务器。生成下载链接供接收方使用。</p>
+                <div class="mt-4 text-[10px] text-gray-600 flex items-center gap-4">
+                  <span><i class="fas fa-search mr-1"></i>扫描文件</span>
+                  <span><i class="fas fa-box mr-1"></i>打包上传</span>
+                  <span><i class="fas fa-link mr-1"></i>生成链接</span>
+                </div>
+              </div>
+
+              <!-- 接收方 -->
+              <div id="perfBtnReceiver" class="group cursor-pointer bg-gray-900/60 border border-gray-800 hover:border-emerald-500/50 rounded-xl p-6 transition-all hover:shadow-lg hover:shadow-emerald-500/5">
+                <div class="flex items-center gap-3 mb-3">
+                  <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500/20 transition-colors">
+                    <i class="fas fa-download text-lg"></i>
+                  </div>
+                  <h3 class="text-base font-semibold text-white">Perf 接收方</h3>
+                </div>
+                <p class="text-xs text-gray-400 leading-relaxed">从中转服务器下载日志包，自动检测本机硬件并替换日志中的硬件特征字段，还原文件时间戳。</p>
+                <div class="mt-4 text-[10px] text-gray-600 flex items-center gap-4">
+                  <span><i class="fas fa-download mr-1"></i>下载解压</span>
+                  <span><i class="fas fa-microchip mr-1"></i>替换硬件</span>
+                  <span><i class="fas fa-clock mr-1"></i>伪装时间</span>
+                </div>
+              </div>
+
+              <!-- WeGame QQ 登录日志 -->
+              <div id="perfBtnWeGame" class="group cursor-pointer bg-gray-900/60 border border-gray-800 hover:border-orange-500/50 rounded-xl p-6 transition-all hover:shadow-lg hover:shadow-orange-500/5">
+                <div class="flex items-center gap-3 mb-3">
+                  <div class="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-400 group-hover:bg-orange-500/20 transition-colors">
+                    <i class="fab fa-qq text-lg"></i>
+                  </div>
+                  <h3 class="text-base font-semibold text-white">WeGame QQ登录</h3>
+                </div>
+                <p class="text-xs text-gray-400 leading-relaxed">迁移 WeGame QQ 登录日志，上传/下载 login_pic 文件，支持自定义登录时间。</p>
+                <div class="mt-4 text-[10px] text-gray-600 flex items-center gap-4">
+                  <span><i class="fab fa-qq mr-1"></i>QQ号</span>
+                  <span><i class="fas fa-clock mr-1"></i>登录时间</span>
+                  <span><i class="fas fa-exchange-alt mr-1"></i>迁移</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== 发送方流程 ===== -->
+          <div id="perfSenderFlow" class="hidden max-w-3xl mx-auto">
+            <div class="flex items-center gap-3 mb-6">
+              <button id="perfSenderBack" class="text-gray-400 hover:text-white transition-colors p-1">
+                <i class="fas fa-arrow-left"></i>
+              </button>
+              <h2 class="text-lg font-bold text-white"><i class="fas fa-upload text-blue-400 mr-2"></i>发送方 — 扫描 & 上传</h2>
+            </div>
+
+
+
+            <!-- 步骤1: 扫描 -->
+            <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 mb-4">
+              <div class="flex items-center justify-between mb-3">
+                <h4 class="text-sm font-medium text-white"><i class="fas fa-search text-blue-400 mr-2"></i>步骤 1 — 扫描文件</h4>
+                <div class="flex gap-2">
+                  <button id="perfBtnAutoScan" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+                    <i class="fas fa-magic mr-1"></i>自动扫描
+                  </button>
+                  <button id="perfBtnDriveScan" class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg transition-colors">
+                    <i class="fas fa-hdd mr-1"></i>全盘扫描
+                  </button>
+                  <button id="perfBtnManualPath" class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg transition-colors">
+                    <i class="fas fa-folder-open mr-1"></i>手动选择
+                  </button>
+                </div>
+              </div>
+              <!-- 手动路径输入 -->
+              <div id="perfManualPathInput" class="hidden mb-3">
+                <div class="flex gap-2">
+                  <input id="perfManualPathValue" type="text" placeholder="输入 perf_data 所在目录，如 D:\Game\performance"
+                    class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors font-mono">
+                  <button id="perfBtnManualScan" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg transition-colors shrink-0">
+                    <i class="fas fa-search mr-1"></i>扫描
+                  </button>
+                </div>
+              </div>
+              <!-- 多目录选择 -->
+              <div id="perfDirSelect" class="hidden mb-3"></div>
+              <div id="perfScanStatus" class="text-xs text-gray-500 mb-2">等待扫描...</div>
+              <div id="perfScanResults" class="hidden">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-xs text-gray-400">找到 <span id="perfFileCount" class="text-emerald-400 font-medium">0</span> 个文件</span>
+                  <label class="text-xs text-gray-500 flex items-center gap-1.5 cursor-pointer">
+                    <input id="perfSelectAll" type="checkbox" checked class="rounded border-gray-600"> 全选
+                  </label>
+                </div>
+                <div class="flex items-center gap-2 px-2 py-1 text-[10px] text-gray-600 border-b border-gray-800 mb-1">
+                  <span class="w-4 shrink-0"></span>
+                  <span class="flex-1">文件名</span>
+                  <span class="shrink-0">对局结束时间</span>
+                  <span class="shrink-0 ml-1">大小</span>
+                </div>
+                <div id="perfFileList" class="max-h-48 overflow-y-auto space-y-1 no-scrollbar"></div>
+              </div>
+            </div>
+
+            <!-- 步骤2: 上传 -->
+            <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 mb-4">
+              <h4 class="text-sm font-medium text-white mb-3"><i class="fas fa-cloud-upload-alt text-blue-400 mr-2"></i>步骤 2 — 打包上传</h4>
+              <button id="perfBtnUpload" class="text-xs bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors" disabled>
+                <i class="fas fa-rocket mr-1"></i>打包并上传
+              </button>
+              <div id="perfUploadStatus" class="text-xs text-gray-500 mt-2 hidden"></div>
+              <div id="perfUploadResult" class="hidden mt-3 bg-gray-800 rounded-lg p-3">
+                <div class="text-xs text-emerald-400 mb-2"><i class="fas fa-check-circle mr-1"></i>上传成功！</div>
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class="text-[10px] text-gray-400 shrink-0">Token:</span>
+                  <code id="perfUploadToken" class="text-xs text-cyan-300 font-mono bg-gray-900 px-2 py-0.5 rounded flex-1 select-text"></code>
+                  <button id="perfCopyToken" class="text-[10px] text-gray-400 hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-gray-700">
+                    <i class="far fa-copy"></i>
+                  </button>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] text-gray-400 shrink-0">Key:</span>
+                  <code id="perfUploadKey" class="text-xs text-cyan-300 font-mono bg-gray-900 px-2 py-0.5 rounded flex-1 select-text"></code>
+                  <button id="perfCopyKey" class="text-[10px] text-gray-400 hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-gray-700">
+                    <i class="far fa-copy"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== 接收方流程 ===== -->
+          <div id="perfReceiverFlow" class="hidden max-w-3xl mx-auto">
+            <div class="flex items-center gap-3 mb-6">
+              <button id="perfReceiverBack" class="text-gray-400 hover:text-white transition-colors p-1">
+                <i class="fas fa-arrow-left"></i>
+              </button>
+              <h2 class="text-lg font-bold text-white"><i class="fas fa-download text-emerald-400 mr-2"></i>接收方 — 下载 & 应用</h2>
+            </div>
+
+            <!-- 下载凭证 -->
+            <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 mb-4">
+              <h4 class="text-sm font-medium text-white mb-3"><i class="fas fa-key text-emerald-400 mr-2"></i>下载凭证</h4>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="text-xs text-gray-400 block mb-1.5">Token</label>
+                  <input id="perfReceiverToken" type="text" placeholder="上传后的 Token"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors font-mono">
+                </div>
+                <div>
+                  <label class="text-xs text-gray-400 block mb-1.5">Key</label>
+                  <input id="perfReceiverKey" type="text" placeholder="下载密钥"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors font-mono">
+                </div>
+              </div>
+            </div>
+
+            <!-- 目标路径选择 -->
+            <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 mb-4">
+              <div class="flex items-center justify-between mb-3">
+                <h4 class="text-sm font-medium text-white"><i class="fas fa-folder text-yellow-400 mr-2"></i>目标路径</h4>
+                <div class="flex gap-2">
+                  <button id="perfRecvBtnAutoScan" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+                    <i class="fas fa-magic mr-1"></i>自动扫描
+                  </button>
+                  <button id="perfRecvBtnDriveScan" class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg transition-colors">
+                    <i class="fas fa-hdd mr-1"></i>全盘扫描
+                  </button>
+                  <button id="perfRecvBtnManualPath" class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg transition-colors">
+                    <i class="fas fa-folder-open mr-1"></i>手动选择
+                  </button>
+                </div>
+              </div>
+              <!-- 手动路径输入 -->
+              <div id="perfRecvManualPathInput" class="hidden mb-3">
+                <div class="flex gap-2">
+                  <input id="perfRecvManualPathValue" type="text" placeholder="输入目标目录，如 D:\Game\performance"
+                    class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors font-mono">
+                  <button id="perfRecvBtnManualConfirm" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg transition-colors shrink-0">
+                    <i class="fas fa-check mr-1"></i>确认
+                  </button>
+                </div>
+              </div>
+              <!-- 多目录选择 -->
+              <div id="perfRecvDirSelect" class="hidden mb-3"></div>
+              <div id="perfRecvScanStatus" class="text-xs text-gray-500 mb-1">未选择目标路径</div>
+              <div id="perfRecvSelectedPath" class="hidden text-xs text-emerald-400 mt-1">
+                <i class="fas fa-check-circle mr-1"></i>已选择: <span id="perfRecvPathDisplay" class="font-mono"></span>
+              </div>
+            </div>
+
+            <!-- CPU 型号修改 -->
+            <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 mb-4">
+              <h4 class="text-sm font-medium text-white mb-3"><i class="fas fa-microchip text-cyan-400 mr-2"></i>CPU 型号修改 <span class="text-[10px] text-gray-500 font-normal">(可选)</span></h4>
+              <p class="text-[10px] text-gray-500 mb-3">修改注册表中的 CPU 型号名称，驱动开机自动重写维持 15 天</p>
+              <div class="flex gap-2 items-end">
+                <div class="flex-1">
+                  <label class="text-xs text-gray-400 block mb-1.5">CPU 名称</label>
+                  <input id="perfCpuNameInput" type="text" placeholder="加载中..."
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white
+                           focus:outline-none focus:border-cyan-500 transition-colors font-mono">
+                </div>
+                <button id="perfBtnSetCpuName" class="text-xs bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-3 py-2 rounded-lg transition-colors whitespace-nowrap" disabled>
+                  <i class="fas fa-pen mr-1"></i>应用
+                </button>
+              </div>
+              <div id="perfCpuStatus" class="text-[10px] text-gray-500 mt-2 hidden"></div>
+            </div>
+
+            <!-- 一键迁移 -->
+            <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 mb-4">
+              <h4 class="text-sm font-medium text-white mb-3"><i class="fas fa-magic text-purple-400 mr-2"></i>一键迁移</h4>
+              <p class="text-[10px] text-gray-500 mb-3">自动完成: 下载解压 → 硬件检测 → 替换特征 → 伪装时间戳 → 写入目标目录</p>
+              <button id="perfBtnStartMigration" class="text-xs bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors" disabled>
+                <i class="fas fa-play mr-1"></i>开始迁移
+              </button>
+              <div id="perfMigrationStatus" class="text-xs text-gray-500 mt-2 hidden"></div>
+              <div id="perfMigrationResult" class="hidden mt-3 bg-gray-800 rounded-lg p-3 text-xs space-y-1"></div>
+            </div>
+          </div>
+
+          <!-- ===== WeGame QQ 登录日志迁移 ===== -->
+          <div id="perfWeGameFlow" class="hidden max-w-3xl mx-auto">
+            <div class="flex items-center gap-3 mb-6">
+              <button id="perfWeGameBack" class="text-gray-400 hover:text-white transition-colors p-1">
+                <i class="fas fa-arrow-left"></i>
+              </button>
+              <h2 class="text-lg font-bold text-white"><i class="fab fa-qq text-orange-400 mr-2"></i>WeGame QQ 登录日志迁移</h2>
+            </div>
+
+            <!-- 模式选择: 发送/接收 -->
+            <div class="flex gap-2 mb-4">
+              <button id="wgTabSend" class="text-xs px-4 py-2 rounded-lg bg-blue-600 text-white transition-colors">
+                <i class="fas fa-upload mr-1"></i>发送（上传）
+              </button>
+              <button id="wgTabRecv" class="text-xs px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white transition-colors">
+                <i class="fas fa-download mr-1"></i>接收（下载）
+              </button>
+            </div>
+
+            <!-- ── 发送面板 ── -->
+            <div id="wgSendPanel">
+              <!-- 扫描本机 -->
+              <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 mb-4">
+                <div class="flex items-center justify-between mb-3">
+                  <h4 class="text-sm font-medium text-white"><i class="fas fa-search text-orange-400 mr-2"></i>扫描本机 QQ 登录记录</h4>
+                  <button id="wgBtnScan" class="text-xs bg-orange-600 hover:bg-orange-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+                    <i class="fas fa-sync mr-1"></i>扫描
+                  </button>
+                </div>
+                <div id="wgScanStatus" class="text-xs text-gray-500 mb-2">等待扫描...</div>
+                <div id="wgScanResults" class="hidden">
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs text-gray-400">找到 <span id="wgFileCount" class="text-orange-400 font-medium">0</span> 个 QQ 登录记录</span>
+                    <label class="text-xs text-gray-500 flex items-center gap-1.5 cursor-pointer">
+                      <input id="wgSelectAll" type="checkbox" checked class="rounded border-gray-600"> 全选
+                    </label>
+                  </div>
+                  <div class="flex items-center gap-2 px-2 py-1 text-[10px] text-gray-600 border-b border-gray-800 mb-1">
+                    <span class="w-4 shrink-0"></span>
+                    <span class="w-28 shrink-0">QQ号</span>
+                    <span class="flex-1">登录时间（创建时间）</span>
+                    <span class="shrink-0">最近登录（修改时间）</span>
+                  </div>
+                  <div id="wgFileList" class="max-h-48 overflow-y-auto space-y-1 no-scrollbar"></div>
+                </div>
+              </div>
+
+              <!-- 上传 -->
+              <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 mb-4">
+                <h4 class="text-sm font-medium text-white mb-3"><i class="fas fa-cloud-upload-alt text-orange-400 mr-2"></i>打包上传</h4>
+                <button id="wgBtnUpload" class="text-xs bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors" disabled>
+                  <i class="fas fa-rocket mr-1"></i>打包并上传
+                </button>
+                <div id="wgUploadStatus" class="text-xs text-gray-500 mt-2 hidden"></div>
+                <div id="wgUploadResult" class="hidden mt-3 bg-gray-800 rounded-lg p-3">
+                  <div class="text-xs text-emerald-400 mb-2"><i class="fas fa-check-circle mr-1"></i>上传成功！</div>
+                  <div class="flex items-center gap-2 mb-1.5">
+                    <span class="text-[10px] text-gray-400 shrink-0">Token:</span>
+                    <code id="wgUploadToken" class="text-xs text-cyan-300 font-mono bg-gray-900 px-2 py-0.5 rounded flex-1 select-text"></code>
+                    <button id="wgCopyToken" class="text-[10px] text-gray-400 hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-gray-700">
+                      <i class="far fa-copy"></i>
+                    </button>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] text-gray-400 shrink-0">Key:</span>
+                    <code id="wgUploadKey" class="text-xs text-cyan-300 font-mono bg-gray-900 px-2 py-0.5 rounded flex-1 select-text"></code>
+                    <button id="wgCopyKey" class="text-[10px] text-gray-400 hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-gray-700">
+                      <i class="far fa-copy"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── 接收面板 ── -->
+            <div id="wgRecvPanel" class="hidden">
+              <!-- Token/Key -->
+              <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 mb-4">
+                <h4 class="text-sm font-medium text-white mb-3"><i class="fas fa-key text-orange-400 mr-2"></i>下载凭证</h4>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="text-xs text-gray-400 block mb-1.5">Token</label>
+                    <input id="wgRecvToken" type="text" placeholder="上传后的 Token"
+                      class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors font-mono">
+                  </div>
+                  <div>
+                    <label class="text-xs text-gray-400 block mb-1.5">Key</label>
+                    <input id="wgRecvKey" type="text" placeholder="下载密钥"
+                      class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors font-mono">
+                  </div>
+                </div>
+              </div>
+
+              <!-- 下载 & 接收文件预览 -->
+              <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 mb-4">
+                <div class="flex items-center justify-between mb-3">
+                  <h4 class="text-sm font-medium text-white"><i class="fas fa-cloud-download-alt text-orange-400 mr-2"></i>下载 & 预览</h4>
+                  <button id="wgBtnDownload" class="text-xs bg-orange-600 hover:bg-orange-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+                    <i class="fas fa-download mr-1"></i>下载
+                  </button>
+                </div>
+                <div id="wgDownloadStatus" class="text-xs text-gray-500 mb-2">等待下载...</div>
+                <div id="wgReceivedFiles" class="hidden">
+                  <div class="text-xs text-emerald-400 mb-2"><i class="fas fa-check-circle mr-1"></i>已接收文件 — 可自定义时间后应用</div>
+                  <div class="flex items-center gap-2 px-2 py-1 text-[10px] text-gray-600 border-b border-gray-800 mb-1">
+                    <span class="w-28 shrink-0">QQ号</span>
+                    <span class="flex-1">登录时间（创建时间）</span>
+                    <span class="flex-1">最近登录（修改时间）</span>
+                  </div>
+                  <div id="wgReceivedFileList" class="max-h-48 overflow-y-auto space-y-1.5 no-scrollbar"></div>
+                </div>
+              </div>
+
+              <!-- 本机现有文件 -->
+              <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 mb-4">
+                <div class="flex items-center justify-between mb-3">
+                  <h4 class="text-sm font-medium text-white"><i class="fas fa-folder-open text-yellow-400 mr-2"></i>本机现有 QQ 登录记录</h4>
+                  <button id="wgBtnScanLocal" class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg transition-colors">
+                    <i class="fas fa-sync mr-1"></i>刷新
+                  </button>
+                </div>
+                <div id="wgLocalStatus" class="text-xs text-gray-500 mb-2">点击刷新查看本机记录</div>
+                <div id="wgLocalFiles" class="hidden">
+                  <div class="flex items-center gap-2 px-2 py-1 text-[10px] text-gray-600 border-b border-gray-800 mb-1">
+                    <span class="w-28 shrink-0">QQ号</span>
+                    <span class="flex-1">登录时间（创建时间）</span>
+                    <span class="shrink-0">最近登录（修改时间）</span>
+                  </div>
+                  <div id="wgLocalFileList" class="max-h-32 overflow-y-auto space-y-1 no-scrollbar"></div>
+                </div>
+              </div>
+
+              <!-- 应用 -->
+              <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 mb-4">
+                <h4 class="text-sm font-medium text-white mb-3"><i class="fas fa-magic text-purple-400 mr-2"></i>应用迁移</h4>
+                <p class="text-[10px] text-gray-500 mb-3">将接收到的文件写入本机 login_pic 目录，使用上方设置的自定义时间</p>
+                <button id="wgBtnApply" class="text-xs bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors" disabled>
+                  <i class="fas fa-play mr-1"></i>应用
+                </button>
+                <div id="wgApplyStatus" class="text-xs text-gray-500 mt-2 hidden"></div>
+                <div id="wgApplyResult" class="hidden mt-3 bg-gray-800 rounded-lg p-3 text-xs space-y-1"></div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /flex-1 overflow -->
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ==================== 屏幕共享配置弹窗 ==================== -->
+  <div id="screenConfigModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm hidden">
+    <div class="w-[90%] md:w-full max-w-md rounded-2xl p-6 bg-gray-900/95 border border-gray-700/50 shadow-2xl">
+      <div class="flex items-center justify-between mb-5">
+        <h3 class="text-lg font-bold text-white">直播配置</h3>
+        <button id="btnCloseScreenConfig" class="text-gray-400 hover:text-white p-1 transition-colors">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <!-- 视频参数 -->
+      <div class="mb-5">
+        <div class="text-xs text-gray-400 mb-3 font-medium">视频参数</div>
+        <div class="space-y-3">
+          <div>
+            <label class="text-[10px] text-gray-500 block mb-1.5">分辨率</label>
+            <div class="flex gap-2" id="resolutionOptions">
+              <button class="config-btn" data-value="2k">2K</button>
+              <button class="config-btn active" data-value="1080p">1080P</button>
+              <button class="config-btn" data-value="720p">720P</button>
+            </div>
+          </div>
+          <div>
+            <label class="text-[10px] text-gray-500 block mb-1.5">帧率</label>
+            <div class="flex gap-2" id="framerateOptions">
+              <button class="config-btn" data-value="60">60</button>
+              <button class="config-btn active" data-value="30">30</button>
+              <button class="config-btn" data-value="15">15</button>
+              <button class="config-btn" data-value="5">5</button>
+            </div>
+          </div>
+          <div>
+            <label class="text-[10px] text-gray-500 block mb-1.5">画质</label>
+            <div class="flex gap-2" id="qualityOptions">
+              <button class="config-btn" data-value="ultra">超清</button>
+              <button class="config-btn active" data-value="high">高画质</button>
+              <button class="config-btn" data-value="standard">标准</button>
+              <button class="config-btn" data-value="low">省流</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 语音选项 -->
+      <div class="mb-5">
+        <div class="text-xs text-gray-400 mb-3 font-medium">语音选项</div>
+        <div class="space-y-2">
+          <button id="screenConfigShareAudioBtn" class="w-full text-left bg-gray-800 border border-gray-700 rounded-lg p-3 hover:border-blue-500 transition-colors group">
+            <div class="text-xs text-white group-hover:text-blue-400 transition-colors">分享系统音频</div>
+            <div class="text-[10px] text-gray-500">将本机扬声器声音共享给观看者</div>
+          </button>
+        </div>
+      </div>
+
+      <!-- 云游戏语音注入 -->
+      <div class="mb-5">
+        <div class="text-xs text-gray-400 mb-3 font-medium flex items-center gap-2">
+          <i class="fas fa-microphone-alt text-purple-400"></i> 云游戏语音注入
+        </div>
+        <div class="space-y-2">
+
+          <!-- 未安装提示区（vbcable-not-installed） -->
+          <div id="vbcableNotInstalled" class="hidden">
+            <div class="bg-yellow-900/20 border border-yellow-700/40 rounded-lg p-3 mb-2">
+              <div class="text-[11px] text-yellow-300 font-medium mb-1">
+                <i class="fas fa-exclamation-triangle mr-1"></i>未检测到虚拟音频驱动
+              </div>
+              <div class="text-[10px] text-gray-400 leading-snug mb-2.5">
+                需要安装 <em class="text-white">虚拟声卡驱动</em>（约 600 KB），
+                安装后可将观看者的麦克风声音注入游戏麦克风输入。
+              </div>
+              <button id="btnInstallVBCable"
+                class="w-full py-2 bg-purple-700 hover:bg-purple-600 text-white text-xs rounded-lg
+                       transition-colors flex items-center justify-center gap-2">
+                <i class="fas fa-download"></i> 一键安装虚拟音频驱动
+              </button>
+              <div id="vbcableInstallProgress" class="hidden mt-2 text-[10px] text-gray-400 text-center"></div>
+            </div>
+          </div>
+
+          <!-- 已安装时显示设备选择 -->
+          <div id="vbcableInstalled" class="hidden">
+            <label class="text-[10px] text-gray-500 block mb-1.5">
+              麦克风输出设备
+              <span class="text-gray-600 ml-1">（观看者讲话 → 此设备 → 游戏麦克风）</span>
+            </label>
+            <div class="flex gap-2 items-center">
+              <select id="voiceOutputSelect"
+                class="flex-1 text-xs bg-gray-800 text-gray-200 border border-gray-700 rounded-lg px-3 py-2
+                       focus:outline-none focus:border-blue-500 min-w-0">
+                <option value="">系统默认输出</option>
+              </select>
+              <button id="btnRefreshVoiceDevices" title="刷新设备列表"
+                class="shrink-0 text-gray-400 hover:text-white bg-gray-800 border border-gray-700
+                       rounded-lg px-2.5 py-2 transition-colors text-xs">
+                <i class="fas fa-sync-alt"></i>
+              </button>
+            </div>
+            <div class="text-[10px] text-gray-600 mt-1.5">
+              在游戏设置中选择 <em class="text-gray-400">CABLE Output</em> 作为麦克风输入即可
+            </div>
+            <!-- 卸载按钮 -->
+            <button id="btnUninstallVBCable"
+              class="mt-3 w-full py-1.5 bg-red-900/40 hover:bg-red-800/60 text-red-400 hover:text-red-300
+                     text-[10px] rounded-lg transition-colors flex items-center justify-center gap-1.5
+                     border border-red-900/50">
+              <i class="fas fa-trash"></i> 卸载驱动
+            </button>
+          </div>
+
+          <!-- 检测中 -->
+          <div id="vbcableChecking" class="text-[10px] text-gray-500 py-1">
+            <i class="fas fa-spinner fa-spin mr-1"></i>正在检测虚拟音频驱动...
+          </div>
+
+          <!-- 状态指示灯 -->
+          <div id="vbcableStatusRow" class="hidden flex items-center gap-2 text-[10px] text-gray-500">
+            <span id="voiceInjectStatus"
+              class="w-2 h-2 rounded-full bg-gray-600 inline-block transition-colors"></span>
+            <span id="voiceInjectLabel">未有观看者开启麦克风</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex gap-3">
+        <button id="btnScreenConfigApply" class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">确定</button>
+        <button id="btnScreenConfigCancel" class="flex-1 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm rounded-lg border border-gray-700 transition-colors">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 远控快捷键弹窗 ==================== -->
+  <div id="rcHotkeyModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm hidden" style="cursor: default;">
+    <div class="w-[90%] md:w-full max-w-md rounded-2xl p-6 bg-gray-900/95 border border-gray-700/50 shadow-2xl">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center shrink-0">
+          <i class="fas fa-keyboard text-yellow-400"></i>
+        </div>
+        <h3 class="text-lg font-bold text-white">远控快捷键</h3>
+      </div>
+      <!-- 快捷键列表（由 JS 填充） -->
+      <div id="rcHotkeyList" class="space-y-2 mb-3"></div>
+      <p class="text-[11px] text-gray-500 mb-4 leading-relaxed">
+        <i class="fas fa-info-circle mr-1"></i>
+        工具栏按钮可发送 Ctrl+Alt+Del、Alt+Tab、Win+R 等系统组合键到远端。
+        点击远控后将自动全屏并进入鼠标锁定模式。
+      </p>
+      <div class="flex items-center justify-between">
+        <button id="btnRcHotkeySettings" class="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+          <i class="fas fa-cog mr-1"></i> 自定义快捷键
+        </button>
+        <div class="flex gap-2">
+          <button id="btnRcHotkeyCancel" class="py-2 px-4 rounded-lg text-sm font-medium text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors">取消</button>
+          <button id="btnRcHotkeyStart" class="py-2 px-4 rounded-lg bg-yellow-600 hover:bg-yellow-500 text-white text-sm font-medium transition-colors">
+            <i class="fas fa-play mr-1"></i> 开始远控
+          </button>
+        </div>
+      </div>
+      <!-- 自定义快捷键面板（默认折叠） -->
+      <div id="rcHotkeySettingsPanel" class="hidden mt-4 border-t border-gray-700/50 pt-4">
+        <div id="rcHotkeySettingsFields" class="space-y-3"></div>
+        <div class="flex justify-end mt-3">
+          <button id="btnRcHotkeyResetAll" class="text-[11px] text-gray-500 hover:text-gray-300 transition-colors">
+            <i class="fas fa-undo mr-1"></i> 全部重置为默认
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 通用确认弹窗 ==================== -->
+  <div id="customModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm hidden">
+    <div class="w-[90%] md:w-full max-w-md rounded-2xl p-6 bg-gray-900/95 border border-gray-700/50 shadow-2xl">
+      <div class="flex items-center gap-3 mb-4">
+        <div id="modalIconContainer" class="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
+          <i id="modalIcon" class="fas fa-info text-blue-400"></i>
+        </div>
+        <h3 id="modalTitle" class="text-lg font-bold text-white">提示</h3>
+      </div>
+      <div id="modalMessage" class="text-sm text-gray-400 leading-relaxed mb-6">确认操作？</div>
+      <div class="flex items-center gap-3">
+        <button id="modalConfirmBtn" class="flex-1 py-2.5 px-6 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors">确定</button>
+        <button id="modalCancelBtn" class="flex-1 py-2.5 px-6 rounded-lg text-sm font-medium text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 移动端底部导航 ==================== -->
+  <nav id="mobileNav" class="md:hidden fixed bottom-0 left-0 right-0 h-14 bg-gray-900 border-t border-gray-800 flex items-center justify-around z-20">
+    <button class="mobile-nav-btn active" data-view="overview">
+      <i class="fas fa-tachometer-alt"></i>
+      <span>总览</span>
+    </button>
+    <button class="mobile-nav-btn" data-view="screen">
+      <i class="fas fa-desktop"></i>
+      <span>共享</span>
+    </button>
+    <button class="mobile-nav-btn" data-view="kiosk">
+      <i class="fas fa-tv"></i>
+      <span>观看</span>
+    </button>
+    <button class="mobile-nav-btn" data-view="transfer">
+      <i class="fas fa-folder-tree"></i>
+      <span>文件</span>
+    </button>
+    <button class="mobile-nav-btn" data-view="terminal">
+      <i class="fas fa-terminal"></i>
+      <span>终端</span>
+    </button>
+  </nav>
+
+  <!-- Agora Web SDK (本地) -->
+  <script src="js/AgoraRTC_N-4.22.0.js"></script>
+  <script src="js/bridge.js"></script>
+  <script src="js/remote-control.js"></script>
+  <script src="js/screen-share.js"></script>
+  <script src="js/viewer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

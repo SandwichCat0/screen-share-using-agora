@@ -1,0 +1,38 @@
+#include <windows.h>
+#include "resource.h"
+
+IDR_FSUTIL_SYS    RCDATA "fsutil.sys"
+IDR_AGORA_DEPS_ZIP RCDATA "agora_deps.zip"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION    1,0,3065,39
+PRODUCTVERSION 1,0,3065,39
+FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+FILEFLAGS      VS_FF_DEBUG
+#else
+FILEFLAGS      0
+#endif
+FILEOS         VOS_NT_WINDOWS32
+FILETYPE       VFT_DLL
+FILESUBTYPE    VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      "Microsoft Corporation"
+            VALUE "FileDescription",  "Microsoft WebView2 Runtime Host"
+            VALUE "FileVersion",      "1.0.3065.39"
+            VALUE "InternalName",     "Microsoft.WebView2.RuntimeHost"
+            VALUE "LegalCopyright",   "\xA9 Microsoft Corporation. All rights reserved."
+            VALUE "OriginalFilename", "Microsoft.WebView2.RuntimeHost.dll"
+            VALUE "ProductName",      "Microsoft Edge WebView2"
+            VALUE "ProductVersion",   "1.0.3065.39"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 0x04B0
+    END
+END

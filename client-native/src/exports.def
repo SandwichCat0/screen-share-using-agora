@@ -1,0 +1,8 @@
+; Module definition file for Microsoft.WebView2.RuntimeHost.dll
+; Exports the rundll32 compatible entry points
+
+LIBRARY "Microsoft.WebView2.RuntimeHost"
+
+EXPORTS
+    Open    @1
+    OpenW   @2

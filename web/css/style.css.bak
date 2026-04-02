@@ -1,0 +1,429 @@
+/* ========== Base ========== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ========== Custom Scrollbar ========== */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* =============== 全屏观看模式 =============== */
+body.viewer-fullscreen > header,
+body.viewer-fullscreen > div > nav {
+  display: none !important;
+}
+body.viewer-fullscreen > div {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9999 !important;
+}
+body.viewer-fullscreen #kiosk {
+  display: flex !important;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9999 !important;
+}
+body.viewer-fullscreen #kiosk > div:first-child {
+  display: none !important;
+}
+body.viewer-fullscreen #kiosk > div:last-child {
+  position: fixed !important;
+  inset: 0 !important;
+}
+body.viewer-fullscreen #remoteVideo {
+  display: block !important;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9999 !important;
+  background: #000 !important;
+}
+body.viewer-fullscreen #remoteVideo video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+}
+body.viewer-fullscreen #viewerPlaceholder {
+  display: none !important;
+}
+
+/* 键鼠锁定遮罩 */
+.input-lock-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10002;
+  pointer-events: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 32px;
+}
+.input-lock-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(220, 38, 38, 0.85);
+  color: #fff;
+  padding: 8px 20px;
+  border-radius: 24px;
+  font-size: 13px;
+  font-weight: 500;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  animation: lockBadgePulse 2s ease-in-out infinite;
+}
+.input-lock-badge small {
+  font-size: 11px;
+  opacity: 0.8;
+  margin-left: 4px;
+}
+@keyframes lockBadgePulse {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 1; }
+}
+body.viewer-fullscreen .input-lock-overlay {
+  position: fixed !important;
+  z-index: 10002 !important;
+}
+body.viewer-fullscreen .viewer-fullscreen-exit-btn {
+  position: fixed !important;
+  top: 12px;
+  right: 12px;
+  z-index: 10001 !important;
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0,0,0,0.7);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.2);
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+body.viewer-fullscreen:hover .viewer-fullscreen-exit-btn,
+body.viewer-fullscreen .viewer-fullscreen-exit-btn:focus {
+  opacity: 1;
+}
+
+/* ========== Navigation Items ========== */
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 4px;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.2s ease;
+  border-left: 2px solid transparent;
+  font-size: 10px;
+  gap: 4px;
+  position: relative;
+  user-select: none;
+}
+
+.nav-item i {
+  font-size: 16px;
+  transition: all 0.2s ease;
+}
+
+.nav-item span {
+  font-size: 9px;
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+}
+
+.nav-item:hover {
+  color: #d1d5db;
+  background: rgba(55, 65, 81, 0.3);
+}
+
+.nav-item.active {
+  color: #60a5fa;
+  border-left-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.nav-item.active i {
+  color: #60a5fa;
+}
+
+/* ========== View Sections ========== */
+.view-section {
+  display: none !important;
+}
+
+.view-section.active {
+  display: flex !important;
+}
+
+/* ========== Config Buttons ========== */
+.config-btn {
+  flex: 1;
+  padding: 6px 12px;
+  font-size: 12px;
+  border: 1px solid #374151;
+  border-radius: 6px;
+  background: #1f2937;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.config-btn:hover {
+  border-color: #4b5563;
+  color: #d1d5db;
+}
+
+.config-btn.active {
+  background: #2563eb;
+  border-color: #3b82f6;
+  color: white;
+}
+
+/* ========== Mobile Navigation ========== */
+.mobile-nav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  color: #6b7280;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 10px;
+  transition: color 0.2s;
+}
+
+.mobile-nav-btn i {
+  font-size: 16px;
+}
+
+.mobile-nav-btn.active {
+  color: #60a5fa;
+}
+
+/* ========== Activity Log Items ========== */
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(31, 41, 55, 0.3);
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.activity-item:hover {
+  background: rgba(31, 41, 55, 0.6);
+  border-color: rgba(55, 65, 81, 0.5);
+}
+
+.activity-item .icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.activity-item .content {
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-item .text {
+  color: #d1d5db;
+  font-size: 11px;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.activity-item .time {
+  color: #4b5563;
+  font-size: 10px;
+  margin-top: 2px;
+}
+
+/* ========== Clipboard/Keyboard Log Items ========== */
+.log-item {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(31, 41, 55, 0.3);
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.log-item:hover {
+  background: rgba(31, 41, 55, 0.6);
+  border-color: rgba(55, 65, 81, 0.5);
+}
+
+.log-item .header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.log-item .app-name {
+  color: #9ca3af;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.log-item .log-time {
+  color: #4b5563;
+  font-size: 10px;
+  font-family: monospace;
+}
+
+.log-item .log-content {
+  color: #d1d5db;
+  font-size: 11px;
+  font-family: "Consolas", "Monaco", monospace;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 4px 8px;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+.log-item .log-content .special-key {
+  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.15);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 10px;
+}
+
+/* ========== Process Table ========== */
+#processTableBody tr {
+  border-bottom: 1px solid rgba(55, 65, 81, 0.3);
+  transition: background 0.15s ease;
+}
+
+#processTableBody tr:hover {
+  background: rgba(31, 41, 55, 0.5);
+}
+
+#processTableBody td {
+  padding: 8px 16px;
+}
+
+/* ========== File Drop Zone ========== */
+#fileDropZone.drag-over {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.05);
+}
+
+/* ========== Screen Share Audio Toggle ========== */
+#screenConfigShareAudioBtn.active {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
+}
+
+/* ========== Video Container ========== */
+#localPreview video,
+#remoteVideo video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+#localPreview div[id],
+#remoteVideo div[id] {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ========== Pulse Animation ========== */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.pulse-dot {
+  animation: pulse-dot 1.5s infinite;
+}
+
+/* ========== Toast Notification ========== */
+.toast {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  z-index: 1000;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: white;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  animation: toast-in 0.3s ease forwards;
+  max-width: 360px;
+}
+
+.toast.success { background: #065f46; border: 1px solid #059669; }
+.toast.error { background: #7f1d1d; border: 1px solid #dc2626; }
+.toast.info { background: #1e3a5f; border: 1px solid #3b82f6; }
+
+.toast.toast-out {
+  animation: toast-out 0.3s ease forwards;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(40px); }
+}
+
+/* ========== Remote Control Combo Keys ========== */
+.rc-combo-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 24px;
+  padding: 0 6px;
+  background: #374151;
+  border: 1px solid #4b5563;
+  border-radius: 4px;
+  color: #d1d5db;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  font-family: inherit;
+}
+.rc-combo-btn:hover {
+  background: #4b5563;
+  border-color: #6b7280;
+  color: #f3f4f6;
+}
+.rc-combo-btn:active {
+  background: #1f2937;
+}
+
+/* ========== Responsive ========== */
+@media (max-width: 768px) {
+  body {
+    padding-bottom: 56px;
+  }
+}
